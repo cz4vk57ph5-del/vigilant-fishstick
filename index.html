@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>VIX giustificato? — VRP</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--tx:#e8eaf0;--mut:#8b91a1;--ok:#3ecf8e;--hi:#ff5c6c;--lo:#f5b942;--bl:#5aa9ff;--ln:#2a2f3a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:light){:root{--bg:#f4f5f8;--card:#fff;--tx:#14171f;--mut:#667085;--ln:#dde1e8}}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 -apple-system,system-ui,Segoe UI,sans-serif}
+main{max-width:720px;margin:0 auto;padding:14px}
+h1{font-size:18px;margin:4px 0 12px}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:12px;margin-bottom:12px}
+.verdict{font-size:22px;font-weight:700;text-align:center;padding:6px 0}
+.sub{color:var(--mut);font-size:13px;text-align:center}
+.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.k{background:var(--bg);border-radius:10px;padding:8px;text-align:center}
+.k b{display:block;font-size:18px}.k span{color:var(--mut);font-size:11px}
+canvas{width:100%;height:170px;display:block}
+h2{font-size:13px;color:var(--mut);margin:0 0 6px;font-weight:600}
+.row{display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:13px;margin-top:6px}
+button{background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:6px 10px;font-size:13px}
+button.on{border-color:var(--bl);color:var(--bl)}
+.note{color:var(--mut);font-size:12px}
+.err{color:var(--hi);font-size:13px}
+
+select,input[type=number]{background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:5px 6px;font-size:13px}
+canvas{touch-action:pan-y}.tp{min-height:16px;font-size:12px;color:var(--tx);margin-bottom:4px}
+table{width:100%;border-collapse:collapse;font-size:12px}td,th{padding:4px 2px;text-align:right;border-bottom:1px solid var(--ln)}th{color:var(--mut);font-weight:600}td:first-child,th:first-child{text-align:left}
+.p{color:var(--hi)}.n{color:var(--lo)}.z{color:var(--ok)}.al{border-color:var(--hi)}
+.ctl{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.stale canvas,.stale .grid{opacity:.45}
+details summary{cursor:pointer;font-size:13px;color:var(--mut)}.g4{grid-template-columns:1fr 1fr}.g4 .k b{font-size:15px}
+@media(max-width:420px){.grid:not(.g4){grid-template-columns:1fr 1fr}}
+.nv{position:sticky;top:0;z-index:5;display:flex;gap:6px;overflow-x:auto;padding:8px 14px;background:var(--bg);border-bottom:1px solid var(--ln);white-space:nowrap}
+.nv a{color:var(--mut);text-decoration:none;font-size:13px;border:1px solid var(--ln);border-radius:14px;padding:5px 11px}.card{scroll-margin-top:52px}
+td:first-child{position:sticky;left:0;background:var(--card)}
+</style></head><body><nav class="nv"><a href="#s0">Sintesi</a><a href="#s1">Stimatori</a><a href="#s2">Grafici</a><a href="#s3">Backtest</a><a href="#s4">Matrici</a><a href="#s5">Rischio</a><a href="#q0">Scanner</a><a href="#q1">LONG/SHORT</a></nav><main>
+<h1>VIX giustificato? — Variance Risk Premium</h1>
+<div class="card" id="s0"><div class="verdict" id="vd">Carico…</div><div class="grid g4" id="sm" style="margin:8px 0"></div><div class="sub" id="vs"></div><div class="sub" id="fr" style="margin-top:4px"></div></div>
+<div class="card" id="alc"><div class="sub" id="alt"></div></div>
+<div class="card"><div class="ctl"><select id="sx"><option value="SPX">S&amp;P 500 / VIX</option><option value="NDX">Nasdaq 100 / VXN</option><option value="RUT">Russell 2000 / RVX</option></select>
+<select id="sw"><option>6</option><option selected>21</option><option>63</option><option>126</option></select><span class="note">giorni di borsa</span>
+<select id="se"><option value="yz">Yang-Zhang</option><option value="pk" selected>Parkinson+gap</option><option value="gk">Garman-Klass+gap</option><option value="cc">Close-to-close</option></select>
+<select id="sr"><option value="60">60g</option><option value="150" selected>150g</option><option value="250">1a</option><option value="500">2a</option></select></div>
+<div class="grid" id="kp" style="margin-top:8px"></div></div>
+<div class="card"><details><summary>Soglie configurabili (regimi e verdetto)</summary><div class="ctl" style="margin-top:8px"><span class="note">s=VIX3M/VIX−1 (%): contango ≥</span><input id="rA" type="number" step="0.5" value="5" style="width:56px"><span class="note">piatta |s|&lt;</span><input id="rB" type="number" step="0.5" value="1" style="width:56px"><span class="note">backw. forte ≤ −</span><input id="rC" type="number" step="0.5" value="5" style="width:56px"><span class="note">z alto</span><input id="zh" type="number" step="0.1" value="1.5" style="width:56px"><span class="note">VRP alto (pt)</span><input id="vh" type="number" step="0.5" value="8" style="width:56px"><span class="note">z basso</span><input id="zl" type="number" step="0.1" value="-1" style="width:56px"><span class="note">n indipendenti min.</span><input id="mn" type="number" step="1" value="10" style="width:56px"></div><div class="note" style="margin-top:6px">Valori predefiniti fissati a priori (convenzione), non ottimizzati sullo storico.</div></details></div><div class="card" id="s2"><h2>VIX vs vol. realizzata</h2><div class="tp" id="tp">Tocca il grafico per i valori</div><canvas id="c1"></canvas>
+<div class="row"><span style="color:var(--bl)">● VIX</span><span style="color:var(--lo)">● Vol. realizzata</span></div></div>
+<div class="card"><h2>Spread IV − RV storica = VRP retrospettivo (punti)</h2><canvas id="c2"></canvas></div>
+<div class="card"><h2>Realizzata vs implicita sullo stesso orizzonte (VRP in punti, abbinamenti approssimati)</h2><div style="overflow-x:auto"><table id="hm"></table></div>
+<div class="row"><span class="note">Overnight vs intraday (20g, annualizzata)</span><b id="oi"></b></div></div>
+<div class="card"><h2>Struttura a termine (indici S&amp;P)</h2><canvas id="c3" style="height:110px"></canvas><div id="ts"></div><h2 style="margin-top:10px">Futures VIX (CBOE)</h2><canvas id="c4" style="height:110px;display:none"></canvas><div id="fx"></div></div>
+<div class="card"><h2>Statistiche VRP e regime</h2><div id="st"></div></div>
+<div class="card"><h2>Spread IV − RV futuro (storico; NON è il rendimento di uno short VIX)</h2><div class="ctl" style="margin-bottom:6px"><span class="note">Costo (pt vol)</span><input id="ac" type="number" step="0.1" value="0.5" style="width:64px"></div><div id="ex"></div></div>
+<div class="card" id="s1"><h2>Robustezza del VRP: confronto tra stimatori</h2><div id="cs"></div></div><div class="card" id="s3"><h2>Retrospettivo vs prospettivo: IV − RV dei h giorni SUCCESSIVI (riferimento principale: 21 sedute)</h2><div style="overflow-x:auto"><table id="hz"></table></div><div class="note" id="hn"></div><canvas id="c5" style="height:110px"></canvas><div class="note">Il VIX è una IV a 30 giorni di calendario (~21 sedute): 21g è l'abbinamento di riferimento; 5, 10 e 42 sono analisi esplorative, non VRP perfettamente abbinati. Hit ind. = un caso ogni h sedute, IC Wilson 95%. DD cum. = massimo calo dell'edge cumulato non sovrapposto, NON il drawdown di una strategia. Giallo = n indipendenti sotto soglia.</div></div><div class="card" id="s4"><h2>Matrice dei regimi (VIX · curva spot · VVIX · segno VRP), esito a 21 sedute</h2><div style="overflow-x:auto"><table id="mx"></table></div></div><div class="card"><h2>Transizioni tra regimi della curva spot (dopo 5 sedute, % per riga)</h2><div style="overflow-x:auto"><table id="tm"></table></div><div class="note">Descrittivo: frequenze storiche dello stesso campione, non probabilità future. Giallo = meno di 30 osservazioni di partenza.</div></div><div class="card" id="s5"><h2>Come leggere il rischio</h2><div class="note" style="line-height:1.5"><b>Premio statistico (VRP)</b>: scarto medio storico tra IV e RV, non un rendimento. <b>Previsione della RV</b>: il VIX è una stima con errore ampio e code (picchi). <b>Strategie short volatility</b>: il P&amp;L dipende da leva, roll, gamma, margini e costi e può essere negativo anche con VRP&gt;0. <b>Prodotti short VIX</b>: seguono i futures (roll F2/F1), con rischio di perdite estreme. VRP positivo ≠ rendimento garantito; i risultati storici non garantiscono quelli futuri.</div></div><div class="card"><h2>Contesto ed eventi</h2><div id="ev"></div></div>
+<div class="card"><h2>Allarme</h2><div class="ctl"><span class="note">z-score &gt;</span><input id="az" type="number" step="0.1" value="1.8" style="width:64px"><label class="note"><input id="ai" type="checkbox" checked> solo se curva non invertita</label></div></div>
+<div class="card"><h2>Esportazione completa</h2><div class="row"><button id="exportUnified" style="font-weight:700">Esporta CSV.GZ VERIFICATO (non ZIP)</button> <button id="exportAll">Esporta anche ZIP</button><span class="note" id="exportAllStatus">Il CSV.GZ contiene il CSV unico integrale compresso direttamente nel browser (gzip). Il CSV unico include TUTTE le colonne storiche, futures realmente disponibili, scanner, fondamentali, LONG/SHORT, dizionario e controlli qualità. Esegui prima scanner e analisi LONG/SHORT. Il download viene bloccato se dati e classifiche non sono sincronizzati.</span></div></div><div class="card"><div class="row"><button id="ex1">Esporta CSV completo</button><span class="note" id="msg"></span></div><div class="row"><span><button id="ai1">Esporta per AI</button> <select id="an"><option>60</option><option selected>120</option><option>250</option></select> <span class="note">giorni</span></span><span class="note" id="am"></span></div></div><div class="card"><div class="row"><button id="ex2">Esporta CSV top 100 vs VIX</button><span class="note" id="m2"></span></div><details><summary>Titoli (modificabili: uno per riga o separati da virgola)</summary><textarea id="tk" rows="6" style="width:100%;box-sizing:border-box;margin-top:6px;background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:6px;font-size:12px"></textarea></details><div class="note" style="margin-top:6px">Usa indice, stimatore, finestra e soglie z della pagina. Per ogni titolo: RV, spread proxy {IV indice}−RV del titolo (NON è il VRP del titolo: l'IV è quella dell'indice; il VRP vero è nello Stock Scanner), z-score e percentile sul proprio storico a 1 anno, beta sull'indice, correlazione con Δ{IV}. Righe ordinate per |z| decrescente (più distaccato dalla sua norma rispetto al VIX).</div></div>
+<div class="card"><details><summary>Cosa significano gli indicatori</summary><div class="note" style="line-height:1.5;margin-top:6px"><b>IV</b>: volatilità implicita a 30 giorni (VIX). <b>RV</b>: volatilità realizzata passata, annualizzata. <b>VRP</b>: IV − RV in punti; positivo = le opzioni prezzano più del movimento recente (non è un rendimento). <b>IV/RV</b>: stesso confronto in rapporto. <b>Z-score 1a</b>: deviazioni standard del VRP rispetto all'ultimo anno. <b>VVIX</b>: volatilità del VIX. <b>SKEW</b>: prezzo relativo delle code ribassiste. <b>F1 − VIX</b>: basis dei futures. <b>F2 − F1</b> &gt; 0: contango. <b>Consenso</b>: quanti stimatori concordano sul segno e quanto divergono. <b>Qualità</b>: dati freschi, z calcolabile, consenso e storico sufficiente.</div></details></div><div class="card"><details><summary>Formule e definizioni</summary><div class="note" style="line-height:1.5;margin-top:6px">r=ln(C<sub>t</sub>/C<sub>t−1</sub>); gap g=ln(O<sub>t</sub>/C<sub>t−1</sub>); oc=ln(C/O); hl=ln(H/L). RV annualizzate: √(252·σ²)·100 su finestra causale (giorni i−w+1…i).<br>CC: σ²=varianza campionaria (n−1) di r. Parkinson+gap: hl²/(4ln2)+g². Garman-Klass+gap: ½hl²−(2ln2−1)oc²+g². Yang-Zhang: var(g)+k·var(oc)+(1−k)·RS, k=0,34/(1,34+(w+1)/(w−1)), RS=ln(H/C)ln(H/O)+ln(L/C)ln(L/O). PK/GK non sottraggono la media (CC sì): differenze piccole.<br>Spread storico (VRP retrospettivo): vol=IV−RV; varianza=IV²−RV² (pt²). È descrittivo e NON è il premio di varianza prospettico, che si misura solo a posteriori (edge a h sedute). z=(VRP−media 252)/sd 252, osservazione corrente inclusa. Percentile=quota di valori ≤ attuale.<br>Retrospettivo: RV su giorni passati. Prospettivo: edge<sub>h</sub>=IV−RV dei h giorni successivi−costo, calcolato solo se i+h è già chiuso (nessun look-ahead).<br>Regime curva: s=(VIX3M/VIX−1)·100; contango s≥A; debole B≤s&lt;A; piatta |s|&lt;B; backwardation lieve −C&lt;s≤−B; forte s≤−C. Futures: stessa regola su F2/F1−1 (indicativo).<br>Wilson 95%: c=(p+z²/2n)/(1+z²/n), h=z√(p(1−p)/n+z²/4n²)/(1+z²/n).</div></details></div><p class="note">Indicatore descrittivo, non un segnale operativo. Il VIX guarda 30 giorni di calendario (≈21 di borsa) avanti, la vol. realizzata indietro. La curva futures viene da CBOE via Worker (/vx); quella sopra usa gli indici VIX9D/VIX/VIX3M/VIX6M (spot), fino a 6 mesi: Yahoo non fornisce il VIX1Y. Gli abbinamenti RV/IV (6↔9D, 21↔1M, 63↔3M, 126↔6M) sono approssimati. Statistiche senza costi e slippage; campione storico limitato a 5 anni.</p>
+<div class="card" id="q0"><h2>Stock Quant Scanner TOP 100 (motore separato dal VIX)</h2>
+<div class="ctl"><button id="sb">Carica scanner</button><label class="note"><input id="so" type="checkbox"> includi opzioni (IV, earnings; ~3-4 richieste/titolo)</label><span class="note" id="sm2"></span></div>
+<div class="note" style="margin-top:6px">Usa l'elenco titoli della sezione export. Nessun dato inventato: dove la fonte non risponde compare N/D.</div>
+<div id="sa" style="display:none">
+<div class="ctl" style="margin-top:8px"><input id="sf" placeholder="Ticker" style="width:70px;background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:5px"><select id="ss"></select><span class="note">|z|≥</span><input id="sz" type="number" step="0.5" value="0" style="width:56px"><select id="sp"><option value="">IV−RV: tutti</option><option value="+">IV−RV &gt; 0</option><option value="-">IV−RV &lt; 0</option></select><span class="note">qualità≥</span><input id="sqm" type="number" value="0" style="width:56px"></div>
+<div class="ctl" style="margin-top:6px"><span class="note">Pesi Anom/Vol/VRP/Qual</span><input id="wa" type="number" value="40" style="width:52px"><input id="wv" type="number" value="30" style="width:52px"><input id="wr" type="number" value="20" style="width:52px"><input id="wq" type="number" value="10" style="width:52px"><label class="note"><input id="scs" type="checkbox"> normalizza per settore</label></div>
+<div class="note" id="sn" style="margin:6px 0"></div><div style="overflow-x:auto"><table id="sc"></table></div>
+<div class="note">Anom = |z| di RV20 vs propria storia a 1 anno; Vol = RV60; VRP = IV30−RV21 (solo con opzioni); Qual = qualità dati. Punteggi = percentile 0-100 nell'universo. Anomalia statistica ≠ opportunità direzionale. Tocca un ticker per la scheda, un'intestazione per ordinare.</div>
+<div id="sd" style="display:none;margin-top:8px"><h2 id="sdt"></h2><canvas id="sdc" style="height:110px"></canvas><div id="sdb"></div></div>
+<h2 style="margin-top:12px">Correlazioni e concentrazione (250g)</h2><div class="ctl"><span class="note">soglia gruppi ρ≥</span><input id="ct" type="number" step="0.05" value="0.7" style="width:60px"></div><div id="cr"></div>
+<h2 style="margin-top:12px">Backtest segnale RV (point-in-time, solo prezzi)</h2><div class="ctl"><span class="note">Costo a/r (bps)</span><input id="bc" type="number" value="10" style="width:60px"></div><div style="overflow-x:auto"><table id="bt"></table></div>
+<div class="note">Acquisto equiponderato nei titoli con segnale, rendimento a h sedute al netto del costo, osservazioni non sovrapposte (1 ogni h date). z calcolato solo con dati fino alla data del segnale. ATTENZIONE: universo = titoli di OGGI (survivorship bias, i rendimenti sono gonfiati); nessun P&amp;L di opzioni (greche, spread, margini): non simulato.</div>
+<h2 style="margin-top:12px">Data quality</h2><div id="dq"></div>
+<div class="row"><select id="xt"><option value="full">TOP 100 completo</option><option value="vrp">VRP individuale</option><option value="anom">Anomalie</option><option value="risk">Rischio</option><option value="corr">Correlazioni</option><option value="sig">Segnali</option><option value="bt">Risultati backtest</option></select><button id="xb">Esporta CSV</button></div>
+</div></div>
+<div class="card" id="q1"><h2>LONG / SHORT: valutazione + trend + regime VIX (evoluzione dello scanner)</h2>
+<div class="ctl"><button id="lb">Analizza LONG/SHORT</button><span class="note" id="lm"></span></div>
+<div class="note" style="margin-top:6px">Richiede «Carica scanner» già eseguito. Fondamentali: route Worker /fundamentals (cache 30 min); dove la fonte non risponde compare N/D, mai zero o valori inventati. Segnali = evidenze coerenti tra valutazione, trend e regime, non previsioni né probabilità di profitto.</div>
+<div id="la" style="display:none"><div class="note" id="lrg" style="margin:8px 0"></div><div class="note" id="ltp" style="line-height:1.6"></div>
+<div class="ctl" style="margin-top:8px"><select id="ls1"></select><span class="note">Fwd P/E</span><input id="lpa" type="number" placeholder="min" style="background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:5px;width:56px"><input id="lpb" type="number" placeholder="max" style="background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:5px;width:56px">
+<select id="lsg"><option value="">Tutti i segnali</option><option>LONG candidato</option><option>SHORT candidato</option><option>WATCHLIST LONG</option><option>WATCHLIST SHORT</option><option>NEUTRALE</option><option>DATI INSUFFICIENTI</option></select>
+<span class="note">confid.≥</span><input id="ldc" type="number" value="0" style="background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:5px;width:56px"><span class="note">copertura val.≥%</span><input id="lcv" type="number" value="0" style="background:var(--bg);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:5px;width:56px"><label class="note"><input id="lrc" type="checkbox"> solo compatibili col regime VIX</label></div>
+<div class="note" id="ln" style="margin:6px 0"></div><div style="overflow-x:auto"><table id="lt"></table></div>
+<div id="ld" style="display:none;margin-top:8px"><h2 id="ldt"></h2><div id="ldb"></div></div>
+<div class="row"><button id="lx">Esporta CSV LONG/SHORT</button></div>
+<details><summary>Formule, soglie e limiti</summary><div class="note" style="line-height:1.5;margin-top:6px">Tutti i punteggi 0–100, alto = più favorevole al lato indicato. <b>Valuation</b> = media pesata rinormalizzata dei componenti disponibili: Fwd P/E (100 − percentile nel settore, o nell'universo se peer&lt;5; winsorizzato a 200), PEG = FwdPE/(crescita EPS·100): clamp(100·(2,5−PEG)/2) (crescita≤0 → 0), EV/EBITDA (percentile invertito, tetto 100), FCF yield/6%·100, P/S solo se senza utili; pesi 0,30/0,25/0,15/0,20/0,10; con utili negativi PE e PEG esclusi e tetto 50. Storico proprio del multiplo: N/D (nessuno storico point-in-time). <b>Qualità</b> = media di margine operativo/30%, crescita ricavi e crescita EPS (50+50·tanh(x/k)). <b>Trend</b> = momentum 1/3/6m e forza relativa vs S&amp;P (0,25 ciascuno), distanza SMA50 e SMA200 (0,10), pendenza SMA50 (0,15), drawdown 1a (0,15); la forza relativa vs settore non è calcolata. <b>Regime</b>: Tranquillo, Vol. in aumento, Stress elevato, Stress in attenuazione, Normalizzazione, Misto, da livello, Δ5g, percentile, max 20g, curva VIX3M/VIX e VIX9D; compatibilità LONG/SHORT tabellata (modificabile in LS.RG). <b>Rischio</b>: LONG = 100 − percentile RV60; SHORT = 100 − media(percentile RV60, percentile mom 1m) come proxy di squeeze (short interest N/D). <b>LONG</b> = 0,25·Val + 0,15·Qual + 0,30·Trend + 0,10·Regime + 0,20·Rischio; <b>SHORT</b> = stessa formula con 100−Val, 100−Qual, 100−Trend, regime e rischio SHORT. Tetti: LONG ≤49 se Trend&lt;35; SHORT ≤49 se Trend&gt;65. Pesi e soglie sono iniziali, non ottimizzati. <b>Candidato</b>: punteggio ≥65, scarto ≥20 sull'altro lato, trend e valutazione coerenti, confidenza ≥60; LONG declassato in Stress elevato, SHORT in Stress in attenuazione o squeeze ≥80. <b>Watchlist</b>: ≥55 e scarto ≥10. <b>Confidenza dati</b> = 0,35·copertura valutazione + 0,15·qualità disponibile + 0,30·qualità prezzi + 0,20·qualità stime (stima analisti 1, derivata 0,7, solo storico 0,3); misura i dati, non la probabilità di profitto. <b>Backtest dei nuovi score: DISABILITATO</b>: non esiste uno storico point-in-time di stime e multipli (applicare il Forward P/E attuale al passato sarebbe look-ahead).</div></details></div></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const W="https://icy-sea-ec77.alessiostanca3.workers.dev";
+const IDX={SPX:["^GSPC","^VIX"],NDX:["^NDX","^VXN"],RUT:["^RUT","^RVX"]};
+const P=s=>"/v8/finance/chart/"+encodeURIComponent(s)+"?range=5y&interval=1d";
+const Y1="https://query1.finance.yahoo.com",Y2="https://query2.finance.yahoo.com";
+const okn=v=>typeof v=="number"&&isFinite(v)&&v>0;
+const esc=x=>String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const isoD=x=>{if(typeof x!="string"||!/^\d{4}-\d{2}-\d{2}$/.test(x))return false;const t=Date.parse(x+"T00:00:00Z");return !isNaN(t)&&new Date(t).toISOString().slice(0,10)==x};
+async function fj(u,n=2){for(let k=0;;k++){const ac=new AbortController(),t=setTimeout(()=>ac.abort(),15000);
+  try{const r=await fetch(u,{signal:ac.signal});if(!r.ok){const e=new Error("HTTP "+r.status);e.st=r.status;throw e}return await r.json()}
+  catch(e){if(k+1>=n||(e.st&&e.st<500&&e.st!=429))throw e;await new Promise(z=>setTimeout(z,600*(k+1)))}finally{clearTimeout(t)}}}
+async function get(s){
+  const t=[W+P(s),W+"/?url="+encodeURIComponent(Y1+P(s)),W+"/?url="+encodeURIComponent(Y2+P(s)),Y1+P(s),Y2+P(s)];let e;
+  for(const u of t){try{
+    const c=(await fj(u,1)).chart.result[0],q=c.indicators.quote[0],m=new Map();
+    if(!Array.isArray(c.timestamp))throw new Error("risposta senza timestamp");
+    c.timestamp.forEach((x,i)=>{const k=q.close[i];if(!okn(k)||!isFinite(x))return;
+      const o=okn(q.open[i])?q.open[i]:null,h=okn(q.high[i])?q.high[i]:null,l=okn(q.low[i])?q.low[i]:null;
+      const coh=o!=null&&h!=null&&l!=null&&h>=Math.max(o,k,l)*(1-5e-4)&&l<=Math.min(o,k,h)*(1+5e-4);
+      m.set(new Date(x*1e3).toISOString().slice(0,10),coh?{c:k,h,l,o}:{c:k,h:null,l:null,o:null})});
+    if(!m.size)throw new Error("serie vuota");
+    RT[s]=t.indexOf(u);return m}catch(x){e=x}}
+  throw e}
+const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+const sd=a=>{const m=mean(a);return Math.sqrt(a.reduce((x,y)=>x+(y-m)**2,0)/(a.length-1))};
+const f=(x,d=1)=>x==null||isNaN(x)?"–":x.toFixed(d);
+const pq=(a,x)=>{const q=pr(a,x);return q==null?"n/d":q+"°"};
+const pr=(a,x)=>{if(typeof x!="number"||!isFinite(x))return null;const b=a.filter(y=>typeof y=="number"&&isFinite(y));return b.length>=30?Math.round(b.filter(y=>y<=x).length/b.length*100):null};
+const corr=(a,b)=>{if(a.length<3||a.length!=b.length)return NaN;const ma=mean(a),mb=mean(b);let c=0,x=0,y=0;a.forEach((v,i)=>{c+=(v-ma)*(b[i]-mb);x+=(v-ma)**2;y+=(b[i]-mb)**2});const dn=Math.sqrt(x*y);return dn>0?c/dn:NaN};
+const lvl=v=>v<15?0:v<20?1:v<30?2:3,LN=["VIX<15","15–20","20–30",">30"];
+const sanit=(id,lo,hi,d)=>{let v=parseFloat($(id).value);if(!isFinite(v)||v<lo||v>hi){v=d;$(id).value=d}return v};
+const qt=(s,p)=>{if(!s.length)return NaN;const x=(s.length-1)*p,l=Math.floor(x),u=Math.ceil(x);return s[l]+(s[u]-s[l])*(x-l)};
+const RGN=["Contango","Contango debole","Curva piatta","Backwardation lieve","Backwardation forte"];
+const num=(id,d)=>{const v=parseFloat($(id).value);return isFinite(v)?v:d};
+const cfg=()=>{let A=sanit("rA",.1,50,5),B=sanit("rB",0,50,1),C=sanit("rC",0,50,5),zh=sanit("zh",-5,10,1.5),zl=sanit("zl",-10,5,-1);const bad=[];
+  if(B>A){B=A;$("rB").value=B;bad.push("piatta ≤ contango")}if(C<B){C=B;$("rC").value=C;bad.push("backwardation forte ≥ piatta")}
+  if(zh<=zl){zh=1.5;zl=-1;$("zh").value=zh;$("zl").value=zl;bad.push("z alto > z basso (ripristinati i predefiniti)")}
+  if(bad.length)setMsg("Soglie corrette per coerenza: "+bad.join("; "),true);
+  return{A,B,C,zh,vh:sanit("vh",0,50,8),zl,mn:Math.round(sanit("mn",1,100,10))}};
+const rgf=(s,c)=>s==null||!isFinite(s)?null:s>=c.A?0:s>=c.B?1:s>-c.B?2:s>-c.C?3:4;
+const nov=(a,sp=21)=>{let l=-1e9;return a.filter(r=>r.i-l>=sp&&(l=r.i,true))};
+const T975=[0,12.706,4.303,3.182,2.776,2.571,2.447,2.365,2.306,2.262,2.228,2.201,2.179,2.160,2.145,2.131,2.120,2.110,2.101,2.093,2.086,2.080,2.074,2.069,2.064,2.060,2.056,2.052,2.048,2.045,2.042];
+const tcrit=df=>{if(!(df>=1))return NaN;if(df<=30)return T975[Math.round(df)];const z=1.959964;return z+(z**3+z)/(4*df)+(5*z**5+16*z**3+3*z)/(96*df*df)};
+const wil=(k,m)=>{if(!m)return"–";const z=1.96,ph=k/m,dn=1+z*z/m,c=(ph+z*z/(2*m))/dn,hw=z*Math.sqrt(ph*(1-ph)/m+z*z/(4*m*m))/dn;return Math.round(ph*100)+"% ["+Math.round((c-hw)*100)+"–"+Math.round((c+hw)*100)+"]"};
+const rw=(a,b)=>`<div class="row"><span>${a}</span><b>${b}</b></div>`;
+const consensus=(v0,hi)=>{const v=v0.filter(isFinite);if(v.length<2)return{mn:NaN,mx:NaN,med:NaN,mean:NaN,sd:NaN,np:0,nh:0,sp:NaN,lv:"N/D",n:v.length,tot:v0.length};const s=[...v].sort((a,b)=>a-b),mn=s[0],mx=s[s.length-1],np=v.filter(x=>x>0).length,nh=v.filter(x=>x>hi).length,sp=mx-mn,lv=(np==v.length||np==0)?(sp<=3&&v.length>=3?"FORTE":"MEDIO"):"DEBOLE";return{mn,mx,med:qt(s,.5),mean:mean(v),sd:sd(v),np,nh,sp,lv,n:v.length,tot:v0.length}};
+const bt=(S,eh,h,mn)=>{const a=S.map(r=>eh(r,h)).filter(x=>x!=null),ni=nov(S.filter(r=>eh(r,h)!=null),h).map(r=>eh(r,h));
+  let c=0,pk=0,dd=0;ni.forEach(x=>{c+=x;pk=Math.max(pk,c);dd=Math.max(dd,pk-c)});const o=[...a].sort((x,y)=>x-y);
+  return{n:a.length,ni:ni.length,hit:a.length?Math.round(a.filter(x=>x>0).length/a.length*100):null,kh:ni.filter(x=>x>0).length,mean:a.length?mean(a):NaN,med:qt(o,.5),p5:qt(o,.05),dd,low:ni.length<mn,mni:ni.length?mean(ni):NaN,ci:ni.length>=3?tcrit(ni.length-1)*sd(ni)/Math.sqrt(ni.length):NaN}};
+const trans=(rows,h)=>{const M=Array.from({length:5},()=>[0,0,0,0,0]),bi=new Map(rows.map(r=>[r.i,r]));rows.forEach(r=>{const q=bi.get(r.i+h);if(q&&r.rg!=null&&q.rg!=null)M[r.rg][q.rg]++});return M};
+const RT={},WH={},HC={t:0,v:null};let VH=8,PROV=false,SIMI=null;
+const whT=()=>{const d=Object.values(RT).filter(x=>x>=3).length;return"Worker: /vx "+(WH.vx||"n/d")+", /history "+(WH.hist||"n/d")+", prezzi "+(Object.keys(RT).length?(d?d+" serie da Yahoo diretto":"via Worker"):"n/d")};
+const C={},CT={};let D=null,CUR=null,ROWS=null,AX=null,ERR=null,STALE=false;
+const sg=x=>(x>0?"+":"")+f(x);
+// finestra mobile causale: solo osservazioni con indice>=1 (l'indice 0 è un segnaposto senza rendimento) e fino a i incluso
+const wq=(a,i,w)=>{if(i-w+1<1)return NaN;const x=a.slice(i-w+1,i+1).filter(isFinite);return x.length<Math.max(2,Math.ceil(.9*w))?NaN:Math.sqrt(mean(x.map(y=>y*y))*252)*100};
+const asof=(M,d)=>M?[...M.entries()].filter(e=>e[0]<=d).sort((a,b)=>a[0]<b[0]?-1:1).map(e=>e[1].c):[];
+const rng=(v,p=1)=>{if(!v.length||!v.every(Number.isFinite))return null;return[Math.min(...v)-p,Math.max(...v)+p]};
+const nodata=(x,w,h)=>{x.fillStyle=css("--mut");x.font="12px sans-serif";x.textAlign="center";x.fillText("Dati insufficienti per il grafico",w/2,h/2)};
+const hCache={},AD=["2025-01-09"];
+const nyseHol=y=>{if(hCache[y])return hCache[y];const S=new Set(),iso=(m,d)=>new Date(Date.UTC(y,m,d)).toISOString().slice(0,10),
+ nth=(m,wd,n)=>1+(wd-new Date(Date.UTC(y,m,1)).getUTCDay()+7)%7+7*(n-1),
+ last=(m,wd)=>{const e=new Date(Date.UTC(y,m+1,0));return e.getUTCDate()-(e.getUTCDay()-wd+7)%7},
+ obs=(m,d,sat=true)=>{const w=new Date(Date.UTC(y,m,d)).getUTCDay();if(w==6){if(sat)S.add(iso(m,d-1))}else if(w==0)S.add(iso(m,d+1));else S.add(iso(m,d))};
+ obs(0,1,false);S.add(iso(0,nth(0,1,3)));S.add(iso(1,nth(1,1,3)));
+ {const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,g=Math.floor((b+8)/25),h=Math.floor((b-g+1)/3),i=(19*a+b-d-h+15)%30,k=Math.floor(c/4),l=c%4,m2=(32+2*e+2*k-i-l)%7,mm=Math.floor((a+11*i+22*m2)/451),mo=Math.floor((i+m2-7*mm+114)/31),da=(i+m2-7*mm+114)%31+1;
+  S.add(new Date(Date.UTC(y,mo-1,da-2)).toISOString().slice(0,10))}
+ S.add(iso(4,last(4,1)));if(y>=2022)obs(5,19);obs(6,4);S.add(iso(8,nth(8,1,1)));S.add(iso(10,nth(10,4,4)));obs(11,25);AD.forEach(x=>{if(+x.slice(0,4)==y)S.add(x)});return hCache[y]=S};
+const isTD=t=>{const w=t.getUTCDay(),o=t.toISOString().slice(0,10);return w>0&&w<6&&!nyseHol(+o.slice(0,4)).has(o)};
+const pdw=t=>{do{t.setUTCDate(t.getUTCDate()-1)}while(!isTD(t));return t};
+function expSess(NY){const t=new Date(Date.UTC(+NY.year,+NY.month-1,+NY.day)),w=t.getUTCDay(),m=+NY.hour*60+ +NY.minute;
+  if(!isTD(t)||m<16*60+15)pdw(t);return t.toISOString().slice(0,10)}
+const wdLag=(k,e)=>{if(k>=e)return 0;let n=0;const t=new Date(k+"T00:00:00Z"),E=new Date(e+"T00:00:00Z");while(t<E){t.setUTCDate(t.getUTCDate()+1);if(isTD(t))n++}return n};
+const FRS=(l,k,e)=>{if(!isoD(k))return{l,k:null,a:null,s:"mancante"};const a=wdLag(k,e);return{l,k,a,s:a==0?"aggiornato":a<=2?"precedente":"obsoleto"}};
+const frT=x=>x.s=="mancante"?x.l+": mancante":x.l+": "+x.k+" · età "+x.a+" gg di borsa · "+x.s;
+function cleanFx(j){
+  const raw=Array.isArray(j&&j.curve)?j.curve:[],sv=x=>x!=null&&x!==""&&isFinite(+x)?+x:null;
+  let c=raw.filter(q=>q&&typeof q=="object").map(q=>({...q,settle:sv(q.settle),date:q.date??j.date})).filter(q=>okn(q.settle)&&isoD(q.exp)&&isoD(q.date)&&q.exp>=q.date);
+  if(!c.length)throw new Error("curva futures vuota o non valida");
+  const md=c.map(q=>q.date).sort().pop();c=c.filter(q=>q.date==md);
+  c.sort((a,b)=>a.exp<b.exp?-1:a.exp>b.exp?1:0);c=c.filter((q,i)=>!i||q.exp!=c[i-1].exp);
+  if(c.length<2)throw new Error("meno di 2 scadenze valide");
+  return c}
+function setMsg(t,e){const m=$("msg");m.className=e?"err":"note";m.textContent=t}
+function clearView(msg,err){
+  $("vd").textContent=msg;$("vd").style.color=err?"var(--hi)":"";$("vs").textContent="";$("fr").textContent="";
+  $("alc").className="card";$("alt").textContent="Allarme non disponibile";document.body.className="";
+  ["kp","hm","ts","fx","st","ex","ev","sm","cs","hz","mx","tm","hn"].forEach(i=>{$(i).innerHTML=""});$("oi").textContent="";$("tp").textContent="";
+  ["c1","c2","c3","c4"].forEach(i=>cv(i))}
+function clearAll(msg,err){D=null;ROWS=null;AX=null;CUR=null;ERR=null;STALE=false;clearView(msg,err)}
+function rr(){try{render()}catch(e){clearView("Errore di calcolo",true);ROWS=null;AX=null;CUR=null;setMsg("Errore di calcolo: "+(e&&e.message||e),true)}}
+function fail(why){
+  if(D&&D.sym===$("sx").value){ERR="Aggiornamento fallito: "+why;rr()}else clearAll("Dati non disponibili",true);
+  setMsg("Errore: "+why+(D?" · dati precedenti mantenuti ma OBSOLETI":""),true)}
+function mk(d,M=D.spx){const A={ret:[],g:[],oc:[],rs:[],pk:[],gk:[],ok:[],rok:[]};
+  d.forEach((k,i)=>{const b=M.get(k),p=i?M.get(d[i-1]):null,L=Math.log,fn=x=>typeof x=="number"&&isFinite(x)&&x>0,good=fn(b.o)&&fn(b.h)&&fn(b.l)&&fn(b.c)&&b.h>=b.l;
+    const cs=!p||wdLag(d[i-1],k)<=1;A.ret[i]=p?L(b.c/p.c):0;A.rok[i]=!!p&&cs;A.ok[i]=good&&cs;
+    if(!A.ok[i]){A.g[i]=A.oc[i]=A.rs[i]=A.pk[i]=A.gk[i]=NaN;return}
+    const g=p?L(b.o/p.c):0,oc=L(b.c/b.o),hl=L(b.h/b.l);
+    A.g[i]=g;A.oc[i]=oc;A.rs[i]=L(b.h/b.c)*L(b.h/b.o)+L(b.l/b.c)*L(b.l/b.o);
+    A.pk[i]=hl*hl/(4*Math.LN2)+g*g;A.gk[i]=.5*hl*hl-(2*Math.LN2-1)*oc*oc+g*g});return A}
+const COVMIN=.9;
+function est(A,e,w,i){const s=i-w+1;if(s<1)return NaN;let v;const ix=[],F=e=="cc"?A.rok:A.ok;for(let j=s;j<=i;j++)if(F[j])ix.push(j);const n=ix.length;
+  if(n<Math.max(2,Math.ceil(COVMIN*w)))return NaN;const pf=a=>ix.map(j=>a[j]);
+  if(e=="cc")v=sd(pf(A.ret))**2;
+  else if(e=="yz"){const k=.34/(1.34+(n+1)/(n-1));v=sd(pf(A.g))**2+k*sd(pf(A.oc))**2+(1-k)*mean(pf(A.rs))}
+  else v=mean(pf(A[e]));
+  return Math.sqrt(Math.max(v,0)*252)*100}
+const nUsed=(A,e,w,i)=>{let n=0;const F=e=="cc"?A.rok:A.ok;for(let j=Math.max(1,i-w+1);j<=i;j++)if(F[j])n++;return n};
+let LT=0;const TTL=3e5;
+async function load(force){try{await load0(force)}catch(e){fail(String(e&&e.message||e))}}
+async function load0(force){const my=++LT;
+  const sym=$("sx").value,[p,v]=IDX[sym],S=[p,v,"^VIX9D","^VIX3M","^VIX6M","^VVIX","^SKEW","^VIX1D"],t0=Date.now();
+  const R=await Promise.allSettled(S.map(s=>(C[s]&&!force&&t0-(CT[s]||0)<TTL)?C[s]:get(s).then(m=>{CT[s]=Date.now();return m})));
+  R.forEach((r,i)=>{if(r.status=="fulfilled")C[S[i]]=r.value;else delete C[S[i]]});
+  if(my!==LT)return;
+  if(R[0].status!="fulfilled"||R[1].status!="fulfilled"){
+    const bad=R[0].status!="fulfilled"?R[0]:R[1];fail(String(bad.reason&&bad.reason.message||bad.reason||"errore sconosciuto"));return}
+  const D0={sym,spx:C[p],vix:C[v],v9:C[S[2]],v3:C[S[3]],v6:C[S[4]],v1:null,v1d:C[S[7]],vv:C[S[5]],sk:C[S[6]],spot:sym=="SPX",fx:null,fxMsg:"",hist:{}};
+  if(D0.spot){const t1=Date.now();try{D0.fx=cleanFx(await fj(W+"/vx"));WH.vx="ok "+(Date.now()-t1)+" ms"}catch(e){WH.vx="errore";D0.fxMsg="Futures non disponibili: "+(e&&e.message||e)}}else WH.vx="non richiesto";
+  if(force==="auto"&&HC.v&&Date.now()-HC.t<18e5){D0.hist=HC.v;WH.hist=Object.keys(HC.v).length+" gg (cache)"}else try{const j=await fj(W+"/history");if(j&&typeof j=="object"&&!Array.isArray(j)){D0.hist=j;HC.v=j;HC.t=Date.now();WH.hist=Object.keys(j).length+" gg"}else WH.hist="forma inattesa"}catch(e){WH.hist="errore"}
+  if(my!==LT)return;
+  D=D0;ERR=null;{const n=nyNow();D.nyDay=n.td;D.nyMin=n.m}
+  const miss=S.filter((s,i)=>R[i].status!="fulfilled"&&s!="^VIX1D");
+  setMsg((miss.length?"Mancano: "+miss.join(", "):"")+" · archivio: "+Object.keys(D.hist).length+" gg",false);rr()}
+const lastKey=(M,d)=>{if(!M)return null;let k=null;for(const x of M.keys())if(x<=d&&(k==null||x>k))k=x;return k};
+const ageD=(k,d)=>Math.round((new Date(d)-new Date(k))/864e5);
+const MIS=[];
+const lastOf=(M,d,nm)=>{const k=lastKey(M,d);if(!k)return null;if(k==d)return M.get(k).c;if(wdLag(k,d)>1)return null;MIS.push({nm:nm||"?",k});return M.get(k).c};
+function render(){
+  const E=$("se").value,Wn=+$("sw").value,CF=cfg();VH=CF.vh;
+  let d=[...D.spx.keys()].sort();const now=new Date(),NY=Object.fromEntries(new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York",hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).formatToParts(now).map(x=>[x.type,x.value])),td=NY.year+"-"+NY.month+"-"+NY.day;
+  const prov=d[d.length-1]==td&&+NY.hour*60+ +NY.minute<16*60+15,exp=expSess(NY);PROV=prov;MIS.length=0;
+  const n=d.length,nF=prov?n-1:n,A=mk(d),rows=[];AX=A;
+  const seqOK=(i,h)=>{for(let j=i+1;j<=i+h;j++)if(!A.rok[j])return false;return true};
+  for(let i=Wn+1;i<n;i++){const v=D.vix.get(d[i]);if(!v)continue;
+    const rv=est(A,E,Wn,i),v3=D.spot&&D.v3?D.v3.get(d[i]):null,vvv=D.vv?D.vv.get(d[i]):null;
+    if(!isFinite(rv))continue;const fw=i+21<nF&&seqOK(i,21),pv=rows[rows.length-1];
+    rows.push({i,d:d[i],prv:prov&&d[i]==td,vix:v.c,rv,vrp:v.c-rv,cv:v3?(v.c>v3.c?1:0):null,sp:v3?(v3.c/v.c-1)*100:null,rg:v3?rgf((v3.c/v.c-1)*100,CF):null,sl:v3?v3.c-v.c:null,vv:vvv?vvv.c:null,dv:pv&&pv.i==i-1&&A.rok[i]?v.c-pv.vix:null,
+      fwd:fw?est(A,E,21,i+21):null,ad:fw?Math.max(...Array.from({length:17},(_,k)=>est(A,E,5,i+k+5)))-v.c:null})}
+  if(!rows.length){clearView("Storico insufficiente",true);$("vs").textContent="Meno osservazioni della finestra scelta";ROWS=null;AX=null;CUR=null;return}
+  ROWS=rows;const L=rows[rows.length-1],iL=L.i,vrps=rows.map(r=>r.vrp);
+  const [pn,vn]=IDX[D.sym],vk=[...D.vix.keys()].sort(),fI=FRS(pn,d[n-1],exp),fV=FRS(vn,vk[vk.length-1],exp),fU=FRS("Riga usata",L.d,exp);
+  let FX=D.spot&&D.fx?D.fx:null,fF=null,fxNote=!D.spot||FX?"":(D.fxMsg||"Futures non disponibili (route /vx del Worker): resta la curva indici.");
+  if(FX){fF=FRS("Futures",FX[0].date,exp);if(fF.s=="obsoleto"||fF.s=="mancante"){fxNote="Futures "+(fF.k?"obsoleti (settlement del "+fF.k+")":"senza data valida")+": esclusi dai calcoli";FX=null}}
+  const STL=!!ERR||[fI,fV,fU].some(x=>x.s=="obsoleto"||x.s=="mancante");STALE=STL;document.body.className=STL?"stale":"";
+  const vbx=FX?D.vix.get(FX[0].date):null,bas=FX&&vbx?FX[0].settle-vbx.c:null;
+  const h=rows.filter(r=>r.i>iL-252).map(r=>r.vrp),hp=rows.filter(r=>r.i>=iL-252&&r.i<iL).map(r=>r.vrp),sd0=sd(hp),zOK=hp.length>=240&&isFinite(sd0)&&sd0>1e-6,z=zOK?(L.vrp-mean(hp))/sd0:NaN,zi=zOK?(L.vrp-mean(h))/sd(h):NaN;
+  const v9=lastOf(D.v9,L.d,"VIX9D"),v3=lastOf(D.v3,L.d,"VIX3M"),v6=lastOf(D.v6,L.d,"VIX6M"),v1=lastOf(D.v1,L.d,"VIX1A"),v1d=D.spot?lastOf(D.v1d,L.d,"VIX1D"):null,vv=lastOf(D.vv,L.d,"VVIX"),sk=lastOf(D.sk,L.d,"SKEW");
+  const inv=D.spot&&v3!=null&&L.vix>v3,back=D.spot&&v9!=null&&v9>L.vix;
+  const EL=["cc","pk","gk","yz"].map(e=>L.vix-est(A,e,Wn,iL)),ELf=EL.filter(isFinite),vmin=ELf.length?Math.min(...ELf):NaN,vmax=ELf.length?Math.max(...ELf):NaN;
+  const SN=["CC","PK","GK","YZ"],EN=["Close-to-close","Parkinson+gap","Garman-Klass+gap","Yang-Zhang"],cf=EN.filter((_,k)=>EL[k]>0),nf2=EN.filter((_,k)=>EL[k]<=0),SP=D.spot?"":" (S&P)";
+  let t,c,why;
+  if(ERR){t="AGGIORNAMENTO FALLITO";c="var(--hi)";why=ERR+" · dati precedenti OBSOLETI, nessun verdetto"}
+  else if(STL){t="DATI OBSOLETI";c="var(--hi)";why="Indice o IV non aggiornati: verdetto e allarme disabilitati"}
+  else if(!zOK){t="DATI INSUFFICIENTI";c="var(--lo)";why="Meno di 240 osservazioni o varianza nulla: z-score non calcolabile, nessun segnale"}
+  else if(inv&&(z>CF.zh||L.vrp>CF.vh)){t="PREMIO ALTO IN BACKWARDATION";c="var(--lo)";why="Curva invertita (VIX > VIX3M) = stress di mercato; il premio statistico è alto, ma questo non prova che il livello del VIX sia giustificato né implica un rendimento"}
+  else if((z>CF.zh||L.vrp>CF.vh)&&vmin>0){t="VIX TROPPO ALTO";c="var(--hi)";why="Premio alto confermato da tutti gli stimatori, senza stress sulla curva"}
+  else if(z>CF.zh||L.vrp>CF.vh){t="PREMIO INCERTO";c="var(--lo)";why="Premio alto confermato da "+cf.join(", ")+(nf2.length?", non da "+nf2.join(", "):"")}
+  else if(z<CF.zl||L.vrp<0){t="VIX TROPPO BASSO";c="var(--lo)";why="Il mercato si muove più di quanto prezzano le opzioni"}
+  else if(z>1){t="VIX UN PO' ALTO";c="var(--lo)";why="Premio sopra la norma, non ancora eccessivo"}
+  else{t="VIX NELLA NORMA";c="var(--ok)";why="Premio in linea con l'ultimo anno"}
+  const MISC=MIS.some(m=>m.nm=="VIX3M");if(D.spot&&v3==null)why+=" · VIX3M assente o non della stessa seduta: curva non usata";else if(MISC)why+=" · attenzione: VIX3M del "+MIS.find(m=>m.nm=="VIX3M").k+" (seduta precedente)";
+  if(inv&&!(z>CF.zh||L.vrp>CF.vh))why+=" · curva invertita (VIX > VIX3M)";
+  $("vd").textContent=t;$("vd").style.color=c;$("vs").textContent=STL?why:why+" · VRP per stimatore: "+SN.map((n,k)=>n+" "+sg(EL[k])).join(", ")+(vmax-vmin>5?" (divergenza alta)":"")+(L.prv?" · dati al "+L.d+" (provvisorio, seduta in corso)":" · dati al "+L.d);
+  {const US=[["VIX3M",v3],["VIX9D",v9],["VIX6M",v6],["VVIX",vv],["SKEW",sk]].filter(x=>D.spot||x[0]=="VVIX"||x[0]=="SKEW"),pt=US.map(x=>x[0]+" "+(x[1]==null?"assente":MIS.some(m=>m.nm==x[0])?"seduta precedente":"sincronizzato"));if(D.spot)pt.push("futures "+(FX?"sincronizzato":"escluso"));
+   $("vs").textContent+=" · Indicatori: "+pt.join(", ")}
+  {const FL=[fI,fV,fF].filter(Boolean);$("fr").textContent="Stato dati — "+FL.map(frT).join(" | ")+(fxNote?" | "+fxNote:"")+(MIS.length?" | Date diverse dalla riga ("+L.d+"): "+MIS.map(m=>m.nm+" "+m.k).join(", "):"")+" | "+whT();$("fr").style.color=STL?"var(--hi)":FL.some(x=>x.s!="aggiornato")?"var(--lo)":""}
+  const CS=consensus(EL,CF.vh),cov=(a=>a.length?a.filter(Boolean).length/a.length:0)(A.ok.slice(-252)),qd=STL||ERR?"BASSA":(MIS.length||cov<.95)?"MEDIA":"ALTA",qs=!zOK?"BASSA":rows.length>=500?"ALTA":"MEDIA",qr=CS.lv=="FORTE"?"ALTA":CS.lv=="MEDIO"?"MEDIA":"BASSA",QR={BASSA:0,MEDIA:1,ALTA:2},qual=[qd,qs,qr].sort((a,b)=>QR[a]-QR[b])[0],qc=x=>x=="ALTA"||x=="FORTE"?"var(--ok)":x=="MEDIA"||x=="MEDIO"?"var(--lo)":"var(--hi)";
+  const tl=(v,l,c)=>`<div class="k"><b${c?` style="color:${c}"`:""}>${v}</b><span>${l}</span></div>`;
+  $("sm").innerHTML=tl(sg(L.vrp)+" pt","Spread IV−RV storica "+SN[["cc","pk","gk","yz"].indexOf(E)]+" · mediana "+sg(CS.med))+tl(CS.lv+" ("+CS.np+"/"+CS.n+" > 0)","Consenso stimatori",qc(CS.lv))+tl(L.rg==null?"n/d":RGN[L.rg],"Regime curva spot"+(L.sp==null?"":" ("+sg(L.sp)+"%)"))+tl(qual,"Qualità · dati "+qd+" · stat. "+qs+" · robust. "+qr,qc(qual));
+  $("cs").innerHTML=rw("VRP minimo / massimo",sg(CS.mn)+" / "+sg(CS.mx))+rw("Mediana / media",sg(CS.med)+" / "+sg(CS.mean))+rw("Deviazione tra stimatori (sd) / ampiezza",f(CS.sd,2)+" / "+f(CS.sp,1)+" pt")+rw("Concordi (VRP>0) / sopra soglia alta ("+CF.vh+")",CS.np+"/"+CS.n+" · "+CS.nh+"/"+CS.n)+rw("Consenso",`<span style="color:${qc(CS.lv)}">${CS.lv}</span>`)+rw("Copertura OHLC (ultime 252 sedute)",Math.round(cov*100)+"%")+rw("Osservazioni usate nella finestra ("+E.toUpperCase()+", min. 90%)",nUsed(A,E,Wn,iL)+" / "+Wn)+`<div class="note">${CS.lv=="FORTE"?"Segnale robusto: segno e ordine di grandezza non dipendono dallo stimatore.":CS.lv=="MEDIO"?"Segno concorde ma ampiezza dipendente dal metodo (oltre 3 pt): prudenza.":"Segnale fragile: gli stimatori divergono nel segno, il risultato dipende dal metodo."}</div>`;
+  const K=[["IV",f(L.vix)],["Vol. realizzata",f(L.rv)],["Spread IV−RV storica",sg(L.vrp)],["Spread varianza IV²−RV² (pt²)",sg(L.vix**2-L.rv**2)],["IV / RV",L.rv>0?f(L.vix/L.rv,2)+"×":"–"],["Z-score 1a (escl. oggi)",f(z,2)],["VVIX"+SP,f(vv,0)],["F1 − VIX",D.spot&&FX?(bas==null?"n/d":sg(bas)):"–"],["F2 − F1",D.spot&&FX?sg(FX[1].settle-FX[0].settle):"–"],["SKEW"+SP,f(sk,0)]];
+  $("kp").innerHTML=K.map(a=>`<div class="k"><b>${a[1]}</b><span>${a[0]}</span></div>`).join("");
+  // alert
+  const thr=sanit("az",0,10,1.8),sync=!MISC&&!($("ai").checked&&D.spot&&v3==null),hit=!STL&&sync&&zOK&&z>thr&&!($("ai").checked&&inv);
+  try{localStorage.az=$("az").value;localStorage.ai=$("ai").checked?1:""}catch(e){}
+  $("alc").className="card"+(hit?" al":"");$("alt").textContent=STL?"Allarme disabilitato: dati obsoleti o non verificati":!sync?"Allarme sospeso: VIX3M assente o non della stessa seduta":hit?"⚠ ALLARME: z-score "+f(z,2)+" > "+thr+(inv?"":" e curva non invertita"):"Allarme non attivo (z "+f(z,2)+")";
+  // heatmap
+  const IVN=$("sx").selectedOptions[0].text.split(" / ")[1]||"IV";
+  const ivf=w=>!D.spot?[L.vix,IVN]:w<=6?[v9,"VIX9D"]:w<=21?[L.vix,"VIX"]:w<=63?[v3,"VIX3M"]:[v6,"VIX6M"];
+  const ES=[["cc","CC"],["pk","PK"],["gk","GK"],["yz","YZ"]];
+  $("hm").innerHTML="<tr><th>Orizzonte (IV)</th>"+ES.map(e=>"<th>"+e[1]+"</th>").join("")+"</tr>"+(D.spot?[6,21,63,126]:[21]).map(w=>{const[iv,nm]=ivf(w);
+    return`<tr><td>${w}g (${nm} ${f(iv)})</td>`+ES.map(e=>{const x=iv==null?NaN:iv-est(A,e[0],w,iL);return isNaN(x)?"<td>–</td>":`<td class="${x>8?"p":x<0?"n":"z"}">${sg(x)}</td>`}).join("")+"</tr>"}).join("")+(D.spot?"":'<tr><td colspan="5" class="note">Per questo indice esiste solo l\'IV a 30 giorni: nessun\'altra scadenza, nessun proxy.</td></tr>');
+  const ov=wq(A.g,iL,20),it=wq(A.oc,iL,20);
+  $("oi").textContent="notte "+f(ov)+" · giorno "+f(it);
+  // term structure
+  const T=[["1G",v1d],["9G",v9],["1M",L.vix],["3M",v3],["6M",v6],["1A",v1]].filter(x=>x[1]!=null);
+  $("ts").innerHTML=(D.spot?`<div class="row"><span>Slope 3M − 1M</span><b>${v3!=null?sg(v3-L.vix)+" pt ("+sg((v3/L.vix-1)*100)+"%) · "+(L.rg==null?(inv?"INVERTITA":"contango"):RGN[L.rg]):"–"}</b></div>`+
+   `<div class="row"><span>Slope 9G − 1M</span><b>${v9!=null?sg(v9-L.vix)+" pt · "+(back?"backwardation":"contango"):"–"}</b></div>`:'<div class="note">Curva disponibile solo con S&amp;P 500</div>');
+  {const s3=D.spot&&T.length>=2;$("c3").style.display=s3?"block":"none";if(s3)draw3(T)}
+  $("c4").style.display=FX?"block":"none";
+  if(FX){const F=FX.map(q=>q.settle),vr=vbx?vbx.c:null,b=bas,sl=F[1]-F[0],k=Math.min(3,F.length-1),lg=F[F.length-1]-F[k],fin=x=>typeof x=="number"&&isFinite(x),vo=FX.map(q=>q.volume??q.vol),oi=FX.map(q=>q.oi??q.open_interest??q.openInterest),hv=vo.some(fin),ho=oi.some(fin),fmt=a=>a.slice(0,3).map(x=>fin(x)?Math.round(x).toLocaleString("it"):"–").join(" / ");
+    $("fx").innerHTML=`<div class="row"><span>Basis F1 − VIX (settlement ${esc(FX[0].date)}${vbx?", VIX stessa data":""})</span><b>${vbx?sg(b)+" pt ("+sg(b/vr*100)+"%)":"n/d: VIX di quella data assente"}</b></div>`+
+     `<div class="row"><span>Slope F2 − F1</span><b>${sg(sl)} pt (${sg(sl/F[0]*100)}%) · ${sl<0?"BACKWARDATION":"contango"}</b></div>`+
+     `<div class="row"><span>Regime curva futures (F2/F1, stesse soglie: indicativo)</span><b>${RGN[rgf(sl/F[0]*100,CF)]}</b></div><div class="row"><span>Slope F${F.length} − F${k+1}</span><b>${sg(lg)} pt</b></div>`+
+     `<div class="row"><span>Spread F2/F1 − 1 (non è il rendimento effettivo del roll)</span><b>${sg(sl/F[0]*100)}%</b></div>`+
+     (hv||ho?`<div class="row"><span>Volume F1 / F2 / F3</span><b>${fmt(vo)}</b></div><div class="row"><span>Open interest F1 / F2 / F3</span><b>${fmt(oi)}</b></div>`:`<div class="note">Volume e open interest non presenti nella risposta /vx: va esteso il Worker.</div>`)+`<div class="note">Settlement CBOE del ${esc(FX[0].date)}. F1 scade il ${esc(FX[0].exp)}.</div>`;
+    draw3(FX.map((q,i)=>["F"+(i+1),q.settle]),"c4")}
+  else $("fx").innerHTML='<div class="note">'+esc(D.spot?fxNote:"Futures VIX disponibili solo con S&P 500")+'</div>';
+  // regime stats
+  const p=(n)=>pr(vrps.slice(-n),L.vrp),cur=L.cv,same=rows.filter(r=>lvl(r.vix)==lvl(L.vix)&&(cur==null||r.cv===cur)),rl=cur==null?"stesso livello VIX":"stesso livello VIX + "+(cur?"backwardation":"contango")+" (VIX3M vs VIX)";
+  const cond=(a)=>a.length>5?f(mean(a.map(r=>r.vrp)))+" ± "+f(sd(a.map(r=>r.vrp)))+" (n="+a.length+")":"–";
+  const vxs=asof(D.vix,L.d),pv=n=>vxs.length>=n*.95?pq(vxs.slice(-n),L.vix):"n/d",pw=n=>rows.length>=n*.95?pq(vrps.slice(-n),L.vrp):"n/d",cr=m=>{const a=rows.slice(-m).filter(r=>r.dv!=null&&A.rok[r.i]);return corr(a.map(r=>r.dv),a.map(r=>A.ret[r.i]))};
+  const fr=(r,h)=>r.i+h<nF&&seqOK(r.i,h)?(Math.exp(A.ret.slice(r.i+1,r.i+h+1).reduce((x,y)=>x+y,0))-1)*100:null;
+  const st=[["Percentile VIX 1a / 3a / 5a (n="+vxs.length+")",pv(252)+" / "+pv(756)+" / "+pv(1260)],["Corr. Δ VIX vs rend. indice 20/60/120g",f(cr(20),2)+" / "+f(cr(60),2)+" / "+f(cr(120),2)],["Percentile VRP 1a / 3a / 5a ("+rows[0].d+" → "+L.d+", n="+rows.length+")",pw(252)+" / "+pw(756)+" / "+pw(1260)],
+   ["VRP medio, "+LN[lvl(L.vix)],cond(rows.filter(r=>lvl(r.vix)==lvl(L.vix)))],
+   ["VRP medio, "+(cur==null?"stesso livello":LN[lvl(L.vix)]+(cur?" + backwardation":" + contango")),cond(same)],
+   ["VRP medio, contango / backw.",cond(rows.filter(r=>r.cv==0))+" / "+cond(rows.filter(r=>r.cv==1))]];
+  {let run=0;for(let k=rows.length-1;k>=0&&L.rg!=null&&rows[k].rg==L.rg&&(k==rows.length-1||rows[k].i==rows[k+1].i-1);k--)run++;let q0=0,q1=0;const bi=new Map(rows.map(r=>[r.i,r]));
+   rows.forEach(r=>{const x=bi.get(r.i+5);if(L.rg!=null&&r.rg==L.rg&&x&&x.rg!=null){q0++;if(x.rg==L.rg)q1++}});
+   st.push(["Persistenza regime (sedute consecutive / invariato dopo 5 sedute)",L.rg==null?"n/d":run+" / "+(q0>=10?Math.round(q1/q0*100)+"% (n="+q0+")":"n/d")]);
+   st.push(["Δ VIX 1 / 5 / 10 sedute (pt)",[1,5,10].map(m=>{const x=D.vix.get(d[iL-m]);return x?sg(L.vix-x.c):"–"}).join(" / ")]);
+   st.push(["Z-score VRP: escluso / incluso il valore odierno (252)",f(z,2)+" / "+f(zi,2)])}
+  $("st").innerHTML=st.map(a=>`<div class="row"><span>${a[0]}</span><b>${a[1]}</b></div>`).join("");
+  // exploitability
+  const cost=sanit("ac",0,20,.5),ok=r=>r.fwd!=null;rows.forEach(r=>{if(r.fwd!=null&&!isFinite(r.fwd))r.fwd=null;if(r.ad!=null&&!isFinite(r.ad))r.ad=null});
+  rows.forEach((r,k)=>{r.vc=null;if(!D.spot||r.vv==null)return;const a=[];for(let j=k-1;j>=0&&rows[j].i>=r.i-252;j--)if(rows[j].vv!=null)a.push(rows[j].vv);if(a.length>=120){const q=a.filter(x=>x<=r.vv).length/a.length;r.vc=q<1/3?0:q<2/3?1:2}});
+  let sim=rows.filter(r=>ok(r)&&lvl(r.vix)==lvl(L.vix)&&(L.sl==null||(r.sl!=null&&Math.abs(r.sl-L.sl)<=1.5))&&(!D.spot||L.vc==null||r.vc===L.vc)),tag="stesso livello VIX, slope 3M−1M ±1,5 pt, classe VVIX (rango sulle 252 sedute precedenti)";const stp=[[tag,sim.length]];
+  if(sim.length<15){sim=same.filter(r=>ok(r)&&Math.abs(r.vrp-L.vrp)<=1.5);tag=rl+", VRP ±1,5 pt";stp.push([tag,sim.length])}
+  if(sim.length<15){sim=same.filter(ok);tag="solo "+rl+" (match stretto troppo piccolo)";stp.push([tag,sim.length])}
+  SIMI={n:sim.length,tag,steps:stp.length};
+  const SX=a=>{const e=a.map(r=>r.vix-r.fwd-cost).sort((x,y)=>x-y),m=a.map(r=>r.ad).filter(x=>x!=null&&isFinite(x)).sort((x,y)=>x-y);
+    const nb=nov(a),kh=nb.filter(r=>r.vix-r.fwd-cost>0).length;return{wl:wil(kh,nb.length),nb:nb.length,n:a.length,hit:Math.round(e.filter(x=>x>0).length/e.length*100),mean:mean(e),med:qt(e,.5),p5:qt(e,.05),w:e[0],ad:qt(m,.95)}};
+  const R=(a,b)=>`<div class="row"><span>${a}</span><b>${b}</b></div>`;
+  if(sim.length>=5){const q=SX(sim);
+    let H=`<div class="note">Casi simili: ${tag}, n=${q.n}. Edge = IV − RV dei 21 giorni successivi, meno costo ${f(cost)} pt.</div>`+
+     R("Hit rate netto",q.hit+"%")+R("Hit rate non sovrapposto ogni 21g (IC 95%)",q.wl+" · n="+q.nb)+R("Edge medio / mediano",sg(q.mean)+" / "+sg(q.med)+" pt")+R("Peggior 5% / peggior caso",sg(q.p5)+" / "+sg(q.w)+" pt")+R("Picco avverso (95°): RV 5g − IV",sg(q.ad)+" pt");
+    H+=R("Filtri provati (casi con esito 21g)",stp.map(x=>x[0]+" → "+x[1]).join(" ▸ "))+(stp.length>1?'<div class="note">⚠ Campione ampliato: il filtro più stretto aveva meno di 15 casi, i risultati sono su un insieme meno specifico.</div>':"");
+    if(L.dv>=2){const J=rows.filter(r=>ok(r)&&r.dv>=2);if(J.length>=8){const j=SX(J);
+      H+=`<div class="note" style="margin-top:8px">Dopo rialzi del VIX ≥ +2 pt in un giorno (oggi ${sg(L.dv)}), n=${j.n}</div>`+R("Hit rate / edge medio",j.hit+"% / "+sg(j.mean)+" pt")+R("Peggior 5% / picco avverso 95°",sg(j.p5)+" / "+sg(j.ad)+" pt")}}
+    $("ex").innerHTML=H+'<div class="note">Spread statistico di volatilità, non P&amp;L di una strategia: ignora leva, roll, contango, spike e costi variabili. Costo fisso, campioni di 21 giorni sovrapposti, il picco avverso indica il path ma non è un drawdown di P&amp;L.</div>'}
+  else $("ex").textContent="Campione insufficiente";
+  {const fc={},eh=(r,h)=>{if(r.i+h>=nF||!seqOK(r.i,h))return null;const k=r.i*100+h;return k in fc?fc[k]:(fc[k]=(v=>isFinite(v)?v:null)(r.vix-est(A,E,h,r.i+h)-cost))},
+   SS=[["Tutti",rows],[L.rg==null?"Stesso livello VIX":"Stesso regime",L.rg==null?rows.filter(r=>lvl(r.vix)==lvl(L.vix)):rows.filter(r=>r.rg==L.rg)]];
+   $("hz").innerHTML="<tr><th>Oriz.</th><th>Campione</th><th>n</th><th>n ind.</th><th>Hit%</th><th>Hit ind. [IC95]</th><th>Media ind. ± IC95</th><th>Edge medio / mediano</th><th>P5</th><th>DD cum.</th></tr>"+[21,5,10,42].map(h=>SS.map(([nm,S])=>{const q=bt(S,eh,h,CF.mn),hl=h+"g"+(h==21?" (principale)":" (esplor.)");
+    return q.n<5?`<tr><td>${hl}</td><td>${nm}</td><td colspan="8">campione insufficiente (n=${q.n})</td></tr>`:`<tr class="${q.low?"n":""}"><td>${hl}</td><td>${nm}</td><td>${q.n}</td><td>${q.ni}</td><td>${q.hit}%</td><td>${wil(q.kh,q.ni)}</td><td>${sg(q.mni)} ±${f(q.ci)}</td><td>${sg(q.mean)} / ${sg(q.med)}</td><td>${sg(q.p5)}</td><td>${f(q.dd)}</td></tr>`}).join("")).join("");
+   {const S0=rows.filter(r=>eh(r,21)!=null),hf=Math.floor(S0.length/2),qa=bt(S0.slice(0,hf),eh,21,CF.mn),qb=bt(S0.slice(hf),eh,21,CF.mn),q21=bt(rows,eh,21,CF.mn),sub=(q,n)=>q.n<5?n+": n/d":n+": mediana "+sg(q.med)+", hit "+q.hit+"%, n ind. "+q.ni;
+    $("hn").innerHTML="Stabilità 21g (prima / seconda metà del campione): "+sub(qa,"1ª")+" · "+sub(qb,"2ª")+"<br>Sensibilità al costo (mediana edge 21g, Tutti): "+[0,.5,1,2].map(c=>c+" pt → "+sg(q21.med+cost-c)).join(" · ");
+    let cc=0;curve("c5",nov(S0,21).map(r=>eh(r,21)).map(x=>cc+=x))}
+   const VT=["basso","medio","alto"],key=r=>lvl(r.vix)+"|"+(r.rg==null?"x":r.rg)+"|"+(r.vc==null?"x":r.vc)+"|"+(r.vrp>0?1:0),
+    lab=k=>{const[a,b,c,e]=k.split("|");return LN[a]+" · "+(b=="x"?"curva n/d":RGN[b])+" · VVIX "+(c=="x"?"n/d":VT[c])+" · VRP "+(e=="1"?"+":"−")},M2=new Map();
+   rows.forEach(r=>{const k=key(r);if(!M2.has(k))M2.set(k,[]);M2.get(k).push(r)});
+   const kc=key(L),cells=[...M2.entries()].filter(e=>e[0]!=kc).sort((a,b)=>b[1].length-a[1].length).slice(0,8),
+    l2=(k,a,cur)=>{const q=bt(a,eh,21,CF.mn);return`<tr class="${q.ni<CF.mn?"n":""}"><td>${cur?"▶ ":""}${lab(k)}</td><td>${a.length}</td><td>${q.ni}</td><td>${q.n?q.hit+"%":"–"}</td><td>${q.n?sg(q.med):"–"}</td></tr>`};
+   $("mx").innerHTML="<tr><th>Cella</th><th>n</th><th>n ind. 21g</th><th>Hit% 21g</th><th>Edge mediano</th></tr>"+l2(kc,M2.get(kc)||[],1)+cells.map(e=>l2(e[0],e[1],0)).join("")+`<tr><td colspan="5" class="note">Giallo = campione indipendente &lt; ${CF.mn}: insufficiente. Celle occupate: ${M2.size}; mostrate quella attuale (▶) e le 8 più numerose. Classe VVIX = terzile del rango del VVIX sulle 252 sedute precedenti (stessa definizione in ogni data).</td></tr>`}
+  {const FRR=[5,10,21,42].map(h=>{const a=nov(same,Math.max(21,h)).map(r=>fr(r,h)).filter(x=>x!=null);return a.length>=5?R(h+" giorni",sg(mean(a))+"% · up "+wil(a.filter(x=>x>0).length,a.length)+" · n="+a.length):R(h+" giorni","–")}).join("");
+   $("st").innerHTML+='<div class="note" style="margin-top:8px">Rendimento successivo dell\'indice, '+rl+', campioni non sovrapposti, passo max(21g, orizzonte) (media · % positivi con IC 95%)</div>'+FRR}
+  {const TR=trans(rows,5);$("tm").innerHTML="<tr><th>Da / a</th>"+RGN.map(x=>"<th>"+x.replace("Backwardation","Backw.")+"</th>").join("")+"<th>n</th></tr>"+TR.map((r,a)=>{const n=r.reduce((x,y)=>x+y,0);return`<tr class="${n<30?"n":""}"><td>${a===L.rg?"▶ ":""}${RGN[a]}</td>`+r.map(c=>`<td>${n?Math.round(c/n*100)+"%":"–"}</td>`).join("")+`<td>${n}</td></tr>`}).join("")}
+  // context
+  const vh=asof(D.vv,L.d),sh=asof(D.sk,L.d);
+  const FO=["2026-12-09"],dd=s=>Math.round((new Date(s)-new Date(td))/864e5);
+  const nf=FO.find(x=>x>=td),nx=(()=>{let y=now.getUTCFullYear(),m=now.getUTCMonth();for(let k=0;k<3;k++){const q=new Date(Date.UTC(y,m+k,1));q.setUTCDate(1+(5-q.getUTCDay()+7)%7);const s=q.toISOString().slice(0,10);if(s>=td)return s}})();
+  const FS=[["VIX9D",D.v9,1],["VIX3M",D.v3,1],["VIX6M",D.v6,1],["VIX1D",D.v1d,1],["VVIX",D.vv,0],["SKEW",D.sk,0]].filter(x=>D.spot||!x[2]).map(([nm,M])=>{const k=lastKey(M,L.d),a=k?ageD(k,L.d):null;return R(nm,!k?"mancante":a==0?"aggiornato "+k:a<=4?"precedente "+k+" ("+a+"g)":"OBSOLETO "+k+", escluso")});
+  const FSH='<div class="note" style="margin-top:8px">Freschezza dati (oltre 4 giorni: escluso dai calcoli)</div>'+FS.join("");
+  $("ev").innerHTML=`<div class="row"><span>VVIX${SP} (percentile 1a / 5a)</span><b>${f(vv,0)} · ${pq(vh.slice(-252),vv)} / ${pq(vh,vv)} (n=${vh.length})</b></div>`+
+   `<div class="row"><span>SKEW CBOE${SP} (proxy tail-risk S&amp;P)</span><b>${f(sk,0)} · ${pq(sh.slice(-252),sk)} 1a (n=${Math.min(252,sh.length)})</b></div>`+
+   `<div class="row"><span>Prossimo FOMC (inserita a mano il 17/11/2026, calendario incompleto: verificare)</span><b>${nf?nf+" · "+dd(nf)+" gg":"non in elenco"}</b></div>`+
+   `<div class="row"><span>Prossimo NFP (1° venerdì, indicativo)</span><b>${nx} · ${dd(nx)} gg</b></div>`+
+   `<div class="note">CPI, earnings big tech e skew 25-delta non sono ricavabili da Yahoo gratuito.${D.spot?"":" VVIX e SKEW riguardano l'S&amp;P 500: contesto, non conferma per "+$("sx").selectedOptions[0].text+"."}</div>`+FSH;
+  CUR=rows.slice(-(+$("sr").value));line("c1",CUR);bars("c2",CUR)}
+function cv(id){const c=$(id),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;const x=c.getContext("2d");x.scale(r,r);return[x,w,h]}
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+function line(id,s){
+  const[x,w,h]=cv(id),a=s.map(q=>q.vix),b=s.map(q=>q.rv),R0=rng(a.concat(b));
+  if(s.length<2||!R0)return nodata(x,w,h);
+  const[mn,mx]=R0,X=i=>i/(s.length-1)*(w-34)+2,Y=v=>h-14-(v-mn)/(mx-mn)*(h-24);
+  x.font="10px sans-serif";x.fillStyle=css("--mut");x.strokeStyle=css("--ln");
+  for(let k=0;k<4;k++){const v=mn+(mx-mn)*k/3;x.beginPath();x.moveTo(0,Y(v));x.lineTo(w-30,Y(v));x.stroke();x.fillText(v.toFixed(0),w-26,Y(v)+3)}
+  [[a,css("--bl")],[b,css("--lo")]].forEach(([z,col])=>{x.beginPath();x.strokeStyle=col;x.lineWidth=2;z.forEach((v,i)=>i?x.lineTo(X(i),Y(v)):x.moveTo(X(i),Y(v)));x.stroke();x.fillStyle=col;x.beginPath();x.arc(X(z.length-1),Y(z[z.length-1]),3,0,7);x.fill()});
+  x.fillStyle=css("--mut");x.textAlign="left";x.fillText(s[0].d,2,h-2);x.textAlign="right";x.fillText(s[s.length-1].d,w-32,h-2);x.textAlign="left"}
+function curve(id,v){const[x,w,h]=cv(id);x.fillStyle=css("--mut");if(v.length<2){x.fillText("dati insufficienti",8,16);return}
+  const lo=Math.min(0,...v),hi=Math.max(0,...v),Y=a=>h-14-(a-lo)/(hi-lo||1)*(h-28),X=i=>2+i/(v.length-1)*(w-34);
+  x.strokeStyle=css("--ln");x.beginPath();x.moveTo(0,Y(0));x.lineTo(w-30,Y(0));x.stroke();
+  x.strokeStyle=css("--bl");x.lineWidth=2;x.beginPath();v.forEach((a,i)=>i?x.lineTo(X(i),Y(a)):x.moveTo(X(i),Y(a)));x.stroke();
+  x.fillStyle=css("--mut");x.fillText("Edge cumulato non sovrapposto 21g: "+sg(v[v.length-1])+" pt (n="+v.length+")",4,12)}
+function bars(id,s){
+  const[x,w,h]=cv(id),v=s.map(q=>q.vrp);if(!v.length||!v.every(Number.isFinite))return nodata(x,w,h);
+  const mx=Math.max(VH,...v.map(Math.abs))+1,bw=(w-34)/v.length,Y=a=>h/2-a/mx*(h/2-8);
+  x.strokeStyle=css("--ln");x.beginPath();x.moveTo(0,Y(0));x.lineTo(w-30,Y(0));x.stroke();
+  x.setLineDash([3,3]);x.beginPath();x.moveTo(0,Y(VH));x.lineTo(w-30,Y(VH));x.stroke();x.setLineDash([]);
+  x.fillStyle=css("--mut");x.font="10px sans-serif";x.fillText("0",w-26,Y(0)+3);x.fillText(String(VH),w-26,Y(VH)+3);
+  v.forEach((a,i)=>{x.fillStyle=a<0?css("--lo"):a>VH?css("--hi"):css("--ok");x.fillRect(2+i*bw,Math.min(Y(0),Y(a)),Math.max(bw-0.5,1),Math.abs(Y(a)-Y(0)))})}
+function draw3(T,id="c3"){const[x,w,h]=cv(id),R0=rng(T.map(a=>a[1]));if(T.length<2||!R0)return nodata(x,w,h);
+  const[mn,mx]=R0,X=i=>20+i/(T.length-1)*(w-60),Y=v=>h-20-(v-mn)/(mx-mn)*(h-34);
+  x.font="11px sans-serif";x.textAlign="center";x.strokeStyle=css("--bl");x.lineWidth=2;x.beginPath();
+  T.forEach((a,i)=>i?x.lineTo(X(i),Y(a[1])):x.moveTo(X(i),Y(a[1])));x.stroke();
+  T.forEach((a,i)=>{x.fillStyle=css("--bl");x.beginPath();x.arc(X(i),Y(a[1]),3,0,7);x.fill();x.fillStyle=css("--tx");x.fillText(f(a[1]),X(i),Y(a[1])-8);x.fillStyle=css("--mut");x.fillText(a[0],X(i),h-4)})}
+["c1","c2"].forEach(id=>{const c=$(id);c.onpointermove=c.onpointerdown=e=>{if(!CUR||!CUR.length)return;const r=c.getBoundingClientRect(),
+  i=Math.max(0,Math.min(CUR.length-1,Math.round((e.clientX-r.left-2)/(r.width-34)*(CUR.length-1)))),q=CUR[i];
+  $("tp").textContent=`${q.d} · IV ${f(q.vix)} · RV ${f(q.rv)} · VRP ${sg(q.vrp)}`}});
+["sw","se","sr","az","ai","ac","rA","rB","rC","zh","vh","zl","mn"].forEach(i=>$(i).onchange=()=>D&&rr());
+$("sx").onchange=()=>{clearAll("Carico…",false);load()};
+function table(){
+  const g=(M,k)=>{const v=M&&M.get(k);return v?v.c:""},fm=x=>typeof x=="number"?(isNaN(x)?"":+x.toFixed(4)):x==null?"":x;
+  const ES=["cc","pk","gk","yz"],WS=[6,21,63,126],A=AX;
+  const CFt=cfg(),Wt=+$("sw").value,
+  evx=(r,z,okp)=>{const v3=D.spot?g(D.v3,r.d):"",inv=typeof v3=="number"&&r.vix>v3,EL=ES.map(e=>r.vix-est(A,e,Wt,r.i)).filter(isFinite),vmin=EL.length?Math.min(...EL):NaN,hi=z>CFt.zh||r.vrp>CFt.vh;
+    let t;if(!okp||!isFinite(z))t="DATI INSUFFICIENTI";else if(inv&&hi)t="PREMIO ALTO IN BACKWARDATION";else if(hi&&vmin>0)t="VIX TROPPO ALTO";else if(hi)t="PREMIO INCERTO";else if(z<CFt.zl||r.vrp<0)t="VIX TROPPO BASSO";else if(z>1)t="VIX UN PO' ALTO";else t="VIX NELLA NORMA";
+    return[t,isFinite(vmin)?vmin:""]};
+  const fxv=r=>{const h=D.hist&&D.hist[r.d],f=h&&Array.isArray(h.fx)&&h.fx.length&&Array.isArray(h.fx[0])&&h.fx[0][2]===r.d&&isoD(r.d)?h.fx:null,nn=okn,F=Array.from({length:8},(_,k)=>f&&f[k]&&nn(f[k][1])?f[k][1]:"");
+    return[...F,f?f[0][2]:"",f&&nn(F[0])?F[0]-r.vix:"",f&&nn(F[0])&&nn(F[1])?F[1]-F[0]:""]};
+  const H=["data","provvisorio","indice_close","iv","vix9d","vix3m","vix6m","vvix","skew","slope_3m_meno_iv","regime_curva","fascia_iv","delta_iv_1g","f1","f2","f3","f4","f5","f6","f7","f8","f1_data","basis_f1","slope_f2_f1",
+    ...ES.flatMap(e=>WS.map(w=>"rv_"+e+"_"+w)),"rv_notte_20","rv_giorno_20","rv_scelta","vrp_scelta","z_1a","z_1a_incl","percentile_1a","rv_futura_21g","edge_21g","picco_avverso_5g","vix1d","vrp_var_scelta","vix_pct_1a","regime5","valutazione_vix","vrp_min_stimatori"];
+  const R=ROWS.map((r,k)=>{const i=r.i,h=ROWS.filter(x=>x.i>r.i-252&&x.i<=r.i).map(x=>x.vrp),hp=ROWS.filter(x=>x.i>=r.i-252&&x.i<r.i).map(x=>x.vrp),okp=hp.length>=240,ok=h.length>=240,q=a=>wq(a,i,20);
+    return [r.d,r.prv?1:0,g(D.spx,r.d),r.vix,g(D.v9,r.d),g(D.v3,r.d),g(D.v6,r.d),g(D.vv,r.d),g(D.sk,r.d),r.sl,r.cv==null?"":r.cv?"backwardation":"contango",LN[lvl(r.vix)],r.dv,...fxv(r),
+      ...ES.flatMap(e=>WS.map(w=>est(A,e,w,i))),q(A.g),q(A.oc),r.rv,r.vrp,okp&&sd(hp)>1e-6?(r.vrp-mean(hp))/sd(hp):"",ok&&sd(h)>1e-6?(r.vrp-mean(h))/sd(h):"",ok?pr(h,r.vrp):"",r.fwd,r.fwd==null?"":r.vix-r.fwd,r.ad,D.spot?g(D.v1d,r.d):"",r.vix**2-r.rv**2,ok?pr(ROWS.filter(x=>x.i>r.i-252&&x.i<=r.i).map(x=>x.vix),r.vix):"",r.rg==null?"":RGN[r.rg],...evx(r,okp&&sd(hp)>1e-6?(r.vrp-mean(hp))/sd(hp):NaN,okp)].map(fm)});
+  return{H,R}}
+function dl(txt,name,type){const a=document.createElement("a"),u=URL.createObjectURL(new Blob([txt],{type}));a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),4000)}
+$("ex1").onclick=()=>{if(!ROWS||!AX)return;if(STALE)setMsg("Esportazione da dati NON aggiornati: vedi stato dati",true);const t=table();
+  dl("\ufeff"+[t.H.join(","),...t.R.map(r=>r.join(","))].join("\n"),"vrp_"+$("sx").value+"_"+$("se").value+$("sw").value+".csv","text/csv")};
+const AIP="Sei un analista di volatilità. Valuta se la volatilità implicita è giustificata rispetto alla volatilità realizzata, usando SOLO i dati qui sotto. Rispondi in italiano con: (1) verdetto: alta / normale / bassa / alta ma giustificata; (2) motivazioni numeriche (VRP, percentile, curva, VVIX, SKEW, divergenza tra stimatori); (3) rischi e scenari; (4) confidenza (bassa/media/alta); (5) cosa cambierebbe il giudizio. Il verdetto della dashboard è euristico: confermalo o criticalo.";
+$("ai1").onclick=()=>{if(!ROWS||!AX)return;const t=table(),n=+$("an").value,tx=id=>$(id).innerText.trim();
+  const keep=["data","provvisorio","indice_close","iv","vix9d","vix3m","vix6m","vvix","skew","slope_3m_meno_iv","regime_curva","fascia_iv","delta_iv_1g","f1","f2","f3","f4","f5","f6","f7","f8","f1_data","basis_f1","slope_f2_f1","rv_cc_6","rv_cc_21","rv_cc_63","rv_pk_21","rv_gk_21","rv_yz_6","rv_yz_21","rv_yz_63","rv_notte_20","rv_giorno_20","rv_scelta","vrp_scelta","z_1a","percentile_1a","rv_futura_21g","edge_21g","picco_avverso_5g","vix1d","vrp_var_scelta","vix_pct_1a","valutazione_vix"],
+    ix=keep.map(k=>t.H.indexOf(k)).filter(i=>i>=0),
+    csv=[ix.map(i=>t.H[i]).join(","),...t.R.slice(-n).map(r=>ix.map(i=>r[i]).join(","))].join("\n");
+  const md=`# Richiesta di giudizio sulla volatilità\n\n## Istruzioni\n${AIP}\n\n## Parametri\nIndice: ${$("sx").selectedOptions[0].text} · finestra RV: ${$("sw").value} giorni · stimatore scelto: ${$("se").selectedOptions[0].text}\n\n`+
+  `## Verdetto della dashboard (euristico)\n${tx("vd")}\n${tx("vs")}\n${tx("fr")}\n\n## Indicatori attuali\n${tx("kp").replace(/\n/g," | ")}\n\n## VRP per orizzonte e stimatore (IV − RV, punti)\n${tx("hm")}\n\n## Struttura a termine\n${tx("ts")}\n${tx("fx")}\n\n## Statistiche e regime\n${tx("st")}\n\n## Storico di casi simili (non è una previsione)\n${tx("ex")}\n\n## Contesto\n${tx("ev")}\n\n`+
+  `## Dizionario colonne\n- valutazione_vix: verdetto della dashboard calcolato per ciascun giorno con i soli dati disponibili a quella data (z-score su 1 anno escluso il giorno stesso, soglie e stimatori correnti); vrp_min_stimatori = VRP minimo tra i 4 stimatori\\n- provvisorio: 1 se la riga è la seduta in corso (prezzi, IV e range intraday parziali: RV e VRP possono cambiare entro la chiusura)\n- f1…f8: settlement dei futures VIX alla data, salvati dall\'archivio del Worker (vuoti prima dell\'inizio dell\'archivio); f1_data = data del settlement di f1; basis_f1 = f1 − iv; slope_f2_f1 = f2 − f1\n- iv: volatilità implicita 30g (VIX/VXN/RVX), punti annualizzati\n- vix9d, vix3m, vix6m: indici S&P a 9 giorni, 3 e 6 mesi (vuoti se l'indice non è S&P)\n- vvix: volatilità del VIX; skew: indice CBOE SKEW\n- slope_3m_meno_iv: VIX3M − IV (negativo = inversione); regime_curva: backwardation se IV > VIX3M\n- rv_<stim>_<n>: vol realizzata annualizzata a n giorni; cc = close-to-close, pk = Parkinson+gap, gk = Garman-Klass+gap, yz = Yang-Zhang\n- vix1d: indice VIX a 1 giorno (vuoto se Yahoo non lo fornisce); vrp_var_scelta = iv² − rv_scelta² (punti²); vix_pct_1a: percentile del VIX sull'ultimo anno\n- rv_notte_20 / rv_giorno_20: componente overnight / intraday a 20 giorni\n- rv_scelta, vrp_scelta (= iv − rv_scelta); z_1a: z-score del VRP sulle 252 sedute PRECEDENTI (valore del giorno escluso); z_1a_incl: stessa misura con il valore del giorno incluso; percentile_1a: percentile del VRP sull'ultimo anno\n- rv_futura_21g: vol realizzata dei 21 giorni SUCCESSIVI a quella data (dato a posteriori); edge_21g = iv − rv_futura_21g; picco_avverso_5g = massimo della RV a 5 giorni nei 21 giorni successivi meno la iv. Vuote sulle ultime 21 righe perché il futuro non è ancora noto\n\n`+
+  `## Serie giornaliera (ultimi ${n} giorni, CSV)\n${csv}\n\n## Avvertenze\nLe colonne rv_futura_21g, edge_21g e picco_avverso_5g sono risultati a posteriori: usali solo per giudicare il comportamento storico, mai come informazione disponibile alla data di ciascuna riga né per l'ultimo giorno. Dati Yahoo/CBOE con ritardo; se provvisorio=1 l'ultima riga è la seduta in corso con dati parziali, altrimenti è l'ultima chiusura completa. Informazione descrittiva, non consulenza finanziaria.\n`;
+  dl(md,"vix_ai_"+$("sx").value+".md","text/markdown");
+  try{navigator.clipboard.writeText(md).then(()=>$("am").textContent="Scaricato e copiato").catch(()=>$("am").textContent="Scaricato")}catch(e){$("am").textContent="Scaricato"}};
+const TOP100="NVDA MSFT AAPL GOOGL AMZN META AVGO TSLA BRK-B LLY WMT JPM V ORCL MA XOM NFLX COST JNJ HD PLTR PG ABBV BAC CVX KO UNH GE AMD CSCO TMUS WFC PM MS ABT IBM CRM GS MCD AXP LIN MRK RTX DIS UBER T NOW PEP CAT INTU VZ BKNG QCOM TMO ISRG BA SCHW AMGN C SPGI BLK TXN ADBE AMAT HON NEE ANET DHR PGR LOW GILD SYK ETN BSX APH KKR PFE COF DE UNP LRCX MU ADP CMCSA TJX PANW MDT CB MRSH COP ADI KLAC VRTX CRWD LMT SBUX BX INTC MO SO".split(" ");
+$("tk").value=TOP100.join(", ");
+const SC={},SCT={};
+async function stkGet(s){if(SC[s]&&Date.now()-SCT[s]<TTL)return SC[s];const m=await get(s);delete RT[s];SC[s]=m;SCT[s]=Date.now();return m}
+const s2=(t,e)=>{const m=$("m2");m.className=e?"err":"note";m.textContent=t};
+const fm2=x=>typeof x=="number"?(isFinite(x)?+x.toFixed(4):""):x==null?"":x;
+function stkRow(s,M,X){
+  const{E,Wn,L,RB}=X,ds=[...D.spx.keys()].sort().filter(k=>k<=L.d&&M.has(k)),i=ds.length-1;
+  if(i<Wn+2||ds[i]!=L.d)return{s,st:"non allineato: ultima data "+(ds[i]||"n/d")};
+  const A=mk(ds,M),vx=k=>{const v=D.vix.get(k);return v?v.c:NaN},iv=L.vix,rv=est(A,E,Wn,i);
+  if(!isFinite(rv))return{s,st:"dati insufficienti per la finestra"};
+  const lo=Math.max(Wn+1,i-252),vr=[],rt=[];
+  for(let j=lo;j<=i;j++){const r=est(A,E,Wn,j),v=vx(ds[j]),q=RB.get(ds[j]);vr[j]=isFinite(r)&&isFinite(v)?v-r:NaN;rt[j]=isFinite(r)&&q&&q.rv>0?r/q.rv:NaN}
+  const hp=[],h=[],rp=[];
+  for(let j=lo;j<=i;j++){if(isFinite(vr[j])){if(j>=i-251)h.push(vr[j]);if(j<i&&j>=i-252)hp.push(vr[j])}if(j<i&&j>=i-252&&isFinite(rt[j]))rp.push(rt[j])}
+  const sdp=hp.length>=2?sd(hp):NaN,okp=hp.length>=240&&sdp>1e-6,z=okp?(vr[i]-mean(hp))/sdp:NaN,pc=h.length>=240?pr(h,vr[i]):null;
+  const R4=["cc","pk","gk","yz"].map(e=>est(A,e,Wn,i)),mins=R4.map(x=>iv-x).filter(isFinite);
+  const rs=[],ri=[];for(let j=Math.max(1,i-249);j<=i;j++){if(!A.rok[j])continue;const a=D.spx.get(ds[j]),p=D.spx.get(ds[j-1]);if(a&&p){rs.push(A.ret[j]);ri.push(Math.log(a.c/p.c))}}
+  const beta=rs.length>=120&&sd(ri)>0?corr(rs,ri)*sd(rs)/sd(ri):NaN;
+  const cd=n=>{const a=[],b=[];for(let j=Math.max(1,i-n+1);j<=i;j++){if(!A.rok[j])continue;const x=vx(ds[j]),y=vx(ds[j-1]);if(isFinite(x)&&isFinite(y)){a.push(x-y);b.push(A.ret[j])}}return a.length>=Math.ceil(n*.8)?corr(a,b):NaN};
+  return{s,z,date:L.d,close:M.get(L.d).c,iv,rvi:L.rv,rv,vrp:iv-rv,ivrv:rv>0?iv/rv:NaN,vrpv:iv*iv-rv*rv,R4,minv:mins.length?Math.min(...mins):NaN,
+    rr:rv/L.rv,rrm:rp.length>=240?mean(rp):NaN,vm:hp.length>=240?mean(hp):NaN,pc,beta,c60:cd(60),c120:cd(120),
+    lab:!isFinite(z)?"dati_insufficienti":z>X.CF.zh?"vrp_alto_vs_norma":z<X.CF.zl?"vrp_basso_vs_norma":"in_linea"}}
+$("ex2").onclick=async()=>{
+  if(!D||!ROWS||!AX){s2("Dati non pronti: attendi il caricamento",true);return}
+  const raw=$("tk").value,list=[...new Set(raw.toUpperCase().split(/[\s,;]+/).filter(x=>/^[A-Z0-9.\-]{1,10}$/.test(x)))];
+  if(!list.length){s2("Nessun ticker valido",true);return}
+  try{localStorage.tk=raw}catch(e){}
+  const b=$("ex2");b.disabled=true;const res={},err={};let k=0,dn=0;
+  const wk=async()=>{while(k<list.length){const s=list[k++];try{res[s]=await stkGet(s)}catch(e){err[s]=String(e&&e.message||e).replace(/[,\r\n"]/g," ")}s2("Scarico "+(++dn)+"/"+list.length+"…")}};
+  try{await Promise.all(Array.from({length:5},wk));
+    if(!D||!ROWS||!AX)throw new Error("dati della pagina cambiati durante il download: riprova");
+    const CF=cfg(),E=$("se").value,Wn=+$("sw").value,L=ROWS[ROWS.length-1],RB=new Map(ROWS.map(r=>[r.d,r])),X={E,Wn,CF,L,RB},ivn=($("sx").selectedOptions[0].text.split(" / ")[1]||"iv").toLowerCase();
+    const out=list.map(s=>res[s]?stkRow(s,res[s],X):{s,st:"errore download: "+(err[s]||"n/d")});
+    const ok=out.filter(x=>!x.st).sort((a,c)=>(isFinite(c.z)?Math.abs(c.z):-1)-(isFinite(a.z)?Math.abs(a.z):-1)),bad=out.filter(x=>x.st);
+    ok.forEach((x,n)=>x.rk=isFinite(x.z)?n+1:"");
+    const H=["ticker","data","provvisorio","close","iv_"+ivn,"rv_indice","rv_titolo","spread_proxy_vix_rv","vix_su_rv","spread_var_proxy_vix_rv","rv_cc","rv_pk","rv_gk","rv_yz","vrp_min_stimatori","rv_titolo_su_indice","rv_titolo_su_indice_media_1a","spread_proxy_media_1a","z_spread_proxy_1a","percentile_1a","beta_indice_250","corr_d"+ivn+"_60","corr_d"+ivn+"_120","distacco_vs_norma","rank_distacco","stimatore","finestra_g","stato"];
+    const R=[...ok.map(x=>[x.s,x.date,L.prv?1:0,x.close,x.iv,x.rvi,x.rv,x.vrp,x.ivrv,x.vrpv,...x.R4,x.minv,x.rr,x.rrm,x.vm,x.z,x.pc,x.beta,x.c60,x.c120,x.lab,x.rk,E,Wn,"ok"]),
+      ...bad.map(x=>[x.s,...Array(H.length-2).fill(""),x.st])].map(r=>r.map(fm2));
+    dl("\ufeff"+[H.join(","),...R.map(r=>r.join(","))].join("\n"),"titoli_vs_"+ivn+"_"+E+Wn+".csv","text/csv");
+    s2("Scaricato: "+ok.length+" titoli"+(bad.length?", "+bad.length+" con errore ("+bad.slice(0,8).map(x=>x.s).join(", ")+(bad.length>8?"…":"")+")":"")+(STALE?" · dati pagina NON aggiornati":""),bad.length>0||STALE)
+  }catch(e){s2("Errore: "+(e&&e.message||e),true)}finally{b.disabled=false}};
+try{if(localStorage.tk)$("tk").value=localStorage.tk}catch(e){}
+try{if(localStorage.az)$("az").value=localStorage.az;$("ai").checked=localStorage.ai!==""}catch(e){}
+addEventListener("resize",()=>D&&rr());
+const nyNow=()=>{const p=Object.fromEntries(new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York",hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).formatToParts(new Date()).map(x=>[x.type,x.value]));return{td:p.year+"-"+p.month+"-"+p.day,m:+p.hour*60+ +p.minute}};
+// il timer controlla ogni 5 min; scarica solo se un dato più nuovo è plausibile (nuova seduta aperta, chiusura non ancora scaricata dopo le 16:45 NY) o se lo stato lo richiede
+function needRefresh(){
+  if(typeof document!="undefined"&&document.hidden)return false;
+  if(!D||ERR||STALE||PROV)return true;
+  const n=nyNow(),last=[...D.spx.keys()].sort().pop(),t=new Date(n.td+"T00:00:00Z"),poss=(isTD(t)&&n.m>=9*60+30?t:pdw(t)).toISOString().slice(0,10);
+  if(last<poss)return true;
+  if(last==n.td&&n.m>=16*60+45&&!(D.nyDay==n.td&&D.nyMin>=16*60+45))return true;
+  return false}
+load();setInterval(()=>{if(needRefresh())load("auto")},300000);
+</script>
+<script>
+// ===== MODULO STOCK QUANT SCANNER (indipendente dal motore VIX; usa solo helper già presenti) =====
+// Dati: get/stkGet (OHLC Yahoo via Worker) · Calcolo: scanOne, corrMatrix, backtest · Vista: renderScan, renderCorr, renderBT
+const SECN={IT:"Tecnologia",CM:"Comunicazione",CD:"Consumi discr.",CS:"Beni primari",HC:"Salute",FN:"Finanza",EN:"Energia",IN:"Industria",MT:"Materiali",UT:"Utility"};
+const SECS={IT:"NVDA MSFT AAPL AVGO ORCL AMD CSCO IBM CRM NOW INTU QCOM TXN ADBE AMAT ANET APH LRCX MU PANW ADI KLAC CRWD PLTR INTC",CM:"GOOGL META NFLX TMUS DIS T VZ CMCSA",CD:"AMZN TSLA HD MCD BKNG LOW TJX SBUX",CS:"WMT COST PG KO PEP PM MO",HC:"LLY JNJ ABBV UNH MRK ABT TMO ISRG AMGN DHR GILD SYK BSX PFE MDT VRTX",FN:"BRK-B JPM V MA BAC WFC MS GS AXP SCHW C SPGI BLK PGR KKR COF CB MRSH BX",EN:"XOM CVX COP",IN:"GE RTX CAT BA HON ETN DE UNP LMT ADP UBER",MT:"LIN",UT:"NEE SO"};
+const ALIAS={MMC:"MRSH"};
+const SEC={};Object.keys(SECS).forEach(k=>SECS[k].split(" ").forEach(t=>SEC[t]=SECN[k]));
+let OPTSTAT="non richieste (casella spenta)",SCN=[],SER={},CORR=null,BTR=null,SSORT={k:"tot",d:-1};
+const n2=(id,t,e)=>{const m=$(id);m.className=e?"err":"note";m.textContent=t};
+const rkp=(v,i,g)=>{ // percentile (0-100) di v[i] tra i valori finiti del suo gruppo g
+  const a=v.filter((x,k)=>isFinite(x)&&g[k]==g[i]);return isFinite(v[i])&&a.length>=5?Math.round(a.filter(x=>x<=v[i]).length/a.length*100):NaN};
+// ---------- calcolo per titolo ----------
+function scanOne(s,M,L,NX){
+  const ds=[...D.spx.keys()].sort().filter(k=>k<=L.d&&M.has(k)),i=ds.length-1;
+  if(i<300)return{s,st:"storico insufficiente ("+(i+1)+" sedute)"};
+  const A=mk(ds,M),c=j=>M.get(ds[j]).c,rvs=[],zs=[];
+  for(let j=0;j<=i;j++)rvs[j]=j>=21?wq(A.ret,j,20):NaN;
+  for(let j=0;j<=i;j++){zs[j]=NaN;if(j<273)continue;const p=rvs.slice(j-252,j).filter(isFinite);if(p.length>=240&&sd(p)>1e-6&&isFinite(rvs[j]))zs[j]=(rvs[j]-mean(p))/sd(p)}
+  const hist=rvs.slice(i-251,i+1).filter(isFinite),reg=IX=>{if(!IX)return{};const a=[],b=[];
+    for(let j=Math.max(1,i-249);j<=i;j++){if(!A.rok[j])continue;const p=IX.get(ds[j]),q=IX.get(ds[j-1]);if(p&&q){a.push(A.ret[j]);b.push(Math.log(p.c/q.c))}}
+    if(a.length<120||sd(b)<=0)return{};const be=corr(a,b)*sd(a)/sd(b);return{be,cr:corr(a,b),idio:sd(a.map((x,k)=>x-be*b[k]))*Math.sqrt(252)*100}};
+  const r1=reg(D.spx),r2=reg(NX);let pk=0,mdd=0;for(let j=i-251;j<=i;j++){pk=Math.max(pk,c(j));mdd=Math.min(mdd,c(j)/pk-1)}
+  let okc=0,gap=0;for(let j=i-251;j<=i;j++){if(A.ok[j])okc++;if(!A.rok[j])gap++}
+  const lag=wdLag(ds[i],L.d);
+  // salti anomali (ultime 252 sedute): split sospetti (rapporto vicino a n o 1/n), movimenti >=25%, outlier robusti (>=8 sigma robusti e >=10%)
+  const rr=[];for(let j=i-251;j<=i;j++)if(j>=1&&A.rok[j]&&isFinite(A.ret[j]))rr.push(A.ret[j]);
+  const med=a=>{const b=[...a].sort((x,y)=>x-y),m=b.length>>1;return b.length?(b.length%2?b[m]:(b[m-1]+b[m])/2):NaN},m0=med(rr),sg=1.4826*med(rr.map(x=>Math.abs(x-m0)));
+  let nSpl=0,nBig=0,nOut=0,mx=0,mxd="";
+  for(let j=i-251;j<=i;j++){if(j<1||!A.rok[j])continue;const rt=c(j)/c(j-1),ar=Math.abs(A.ret[j]);
+    if(ar>mx){mx=ar;mxd=ds[j]}
+    const spl=[2,3,4,5,10,20].some(n=>Math.abs(rt*n-1)<.04||Math.abs(rt/n-1)<.04);
+    if(spl&&ar>.3)nSpl++;else if(ar>=.25)nBig++;else if(sg>0&&ar>=.10&&Math.abs(A.ret[j]-m0)/sg>=8)nOut++}
+  const jpen=Math.min(60,nSpl*30)+Math.min(20,nBig*10)+Math.min(12,nOut*3);
+  const q=Math.max(0,Math.round(100-Math.min(40,lag*10)-(1-okc/252)*50-gap*3-(i<1000?10:0)-jpen));
+  const R=new Map();for(let j=i-251;j<=i;j++)if(A.rok[j])R.set(ds[j],A.ret[j]);
+  SER[s]={ds,cl:ds.map((d,j)=>c(j)),zs,R};
+  const w=x=>wq(A.ret,i,x);
+  return{s,sec:SEC[s]||"N/D",date:ds[i],close:c(i),d1:c(i)/c(i-1)-1,rv20:w(20),rv21:w(21),rv42:w(42),rv60:w(60),rv63:w(63),rv126:w(126),rv252:w(252),
+    z:zs[i],pc:hist.length>=240?pr(hist,rvs[i]):null,beta:r1.be,corrM:r1.cr,betaN:r2.be,idio:r1.idio,dd:mdd,ddNow:c(i)/pk-1,q,lag,okf:okc/252,gaps:gap,n:i+1,spl:nSpl,big:nBig,outl:nOut,mx:(Math.exp(mx)-1)*100,mxd}}
+// ---------- opzioni (opzionale; N/D se la fonte non risponde) ----------
+async function oj(s,d){const p="/v7/finance/options/"+encodeURIComponent(s)+(d?"?date="+d:""),t=[W+"/?url="+encodeURIComponent(Y1+p),W+"/?url="+encodeURIComponent(Y2+p)];let e;
+  for(const u of t){try{const r=(await fj(u,1)).optionChain.result[0];if(!r)throw new Error("vuoto");return r}catch(x){e=x}}throw e}
+const ivAt=(L,S,m)=>{const a=(L||[]).filter(x=>x.impliedVolatility>.01&&x.strike>0);if(!a.length)return NaN;const k=S*m;return a.reduce((b,x)=>Math.abs(x.strike-k)<Math.abs(b.strike-k)?x:b).impliedVolatility*100};
+const midp=x=>x?(x.bid>0&&x.ask>0?(x.bid+x.ask)/2:x.lastPrice>0?x.lastPrice:NaN):NaN;
+async function optGet(s,S){
+  const o=await oj(s),now=Date.now()/864e5,ex=(o.expirationDates||[]).map(e=>({e,d:e/86400-now})).filter(x=>x.d>=7),q=o.quote||{},out={};
+  const pick=t=>ex.length?ex.reduce((b,x)=>Math.abs(x.d-t)<Math.abs(b.d-t)?x:b):null,ch=async x=>x.e==o.expirationDates[0]?o.options[0]:(await oj(s,x.e)).options[0];
+  for(const t of[30,60,90]){const x=pick(t);if(!x){continue}try{const c=await ch(x);
+    out["iv"+t]=(ivAt(c.calls,S,1)+ivAt(c.puts,S,1))/2;out["dte"+t]=Math.round(x.d);if(t==30)out.skew=ivAt(c.puts,S,.95)-out.iv30}catch(e){}}
+  const E=q.earningsTimestamp&&q.earningsTimestamp*1e3>Date.now()?q.earningsTimestamp:null;out.earn=E?new Date(E*1e3).toISOString().slice(0,10):"";out.earnD=E?Math.ceil((E*1e3-Date.now())/864e5):NaN;
+  const xd=q.exDividendDate||q.dividendDate;out.div=xd&&xd*1e3>Date.now()?new Date(xd*1e3).toISOString().slice(0,10):"";
+  if(E){const x=ex.find(y=>y.e>=E);if(x)try{const c=await ch(x),k=a=>(a||[]).reduce((b,y)=>!b||Math.abs(y.strike-S)<Math.abs(b.strike-S)?y:b,null);out.em=(midp(k(c.calls))+midp(k(c.puts)))/S*100}catch(e){}}
+  return out}
+// ---------- punteggi ----------
+function score(){
+  const g=SCN.map(x=>$("scs").checked?x.sec:"all"),W4=["wa","wv","wr","wq"].map(id=>Math.max(0,num(id,0)));
+  const A=SCN.map(x=>Math.abs(x.z)),V=SCN.map(x=>x.rv60),Rr=SCN.map(x=>x.ivs-x.rvm);
+  SCN.forEach((x,i)=>{x.sa=rkp(A,i,g);x.sv=rkp(V,i,g);x.sr=isFinite(Rr[i])?rkp(Rr,i,g):NaN;x.sq=x.q;
+    const p=[x.sa,x.sv,x.sr,x.sq];let t=0,w=0;p.forEach((v,k)=>{if(isFinite(v)){t+=v*W4[k];w+=W4[k]}});x.tot=w>0?Math.round(t/w):NaN})}
+// ---------- vista scanner ----------
+const FMT={s:x=>x,sec:x=>x,close:x=>f(x,2),d1:x=>f(x*100,1)+"%",rv20:x=>f(x),rv60:x=>f(x),rv252:x=>f(x),ivs:x=>f(x),sp:x=>f(x),z:x=>f(x,2),pc:x=>x==null?"–":x+"°",beta:x=>f(x,2),idio:x=>f(x),dd:x=>f(x*100,0)+"%",earnD:x=>isFinite(x)?x+"g":"–",sa:x=>f(x,0),sv:x=>f(x,0),sr:x=>f(x,0),sq:x=>f(x,0),tot:x=>f(x,0)};
+const COLS=[["s","Ticker"],["sec","Settore"],["close","Prezzo"],["d1","1g"],["rv20","RV20"],["rv60","RV60"],["rv252","RV252"],["ivs","IV30"],["sp","IV−RV21"],["z","z RV"],["pc","Pct"],["beta","β"],["idio","Idio"],["dd","DD1a"],["earnD","Earn"],["sa","Anom"],["sv","Vol"],["sr","VRP"],["sq","Qual"],["tot","Tot"]];
+function viewRows(){const t=$("sf").value.toUpperCase().trim(),se=$("ss").value,mz=num("sz",0),vs=$("sp").value,mq=num("sqm",0);
+  return SCN.filter(x=>(!t||x.s.includes(t))&&(!se||x.sec==se)&&(!(mz>0)||Math.abs(x.z)>=mz)&&x.q>=mq&&(vs==""||(isFinite(x.sp)&&(vs=="+"?x.sp>0:x.sp<0))))
+    .sort((a,b)=>{const k=SSORT.k,u=a[k],v=b[k],nu=typeof u=="number"&&!isFinite(u)||u==null,nv=typeof v=="number"&&!isFinite(v)||v==null;if(nu||nv)return nu-nv;return(u<v?-1:u>v?1:0)*SSORT.d})}
+function renderScan(){const R=viewRows();
+  $("sc").innerHTML="<tr>"+COLS.map(c=>`<th data-k="${c[0]}" style="cursor:pointer">${c[1]}${SSORT.k==c[0]?(SSORT.d>0?"▲":"▼"):""}</th>`).join("")+"</tr>"+
+  R.map(x=>"<tr data-t=\""+esc(x.s)+"\">"+COLS.map(c=>{const v=x[c[0]];let cl="";if(c[0]=="z"&&isFinite(v))cl=Math.abs(v)>=2?"p":"";if(c[0]=="sp"&&isFinite(v))cl=v>0?"z":"n";return`<td class="${cl}">${esc(FMT[c[0]](v))}</td>`}).join("")+"</tr>").join("");
+  $("sn").textContent=R.length+" / "+SCN.length+" titoli"+(SCN.some(x=>isFinite(x.ivs))?"":" · IV titolo: N/D (opzioni non caricate o non disponibili): colonne VRP vuote")}
+function detail(t){const x=SCN.find(y=>y.s==t),S=SER[t];if(!x||!S)return;const n=Math.min(252,S.cl.length),a=S.cl.slice(-n),lo=Math.min(...a),hi=Math.max(...a);
+  $("sd").style.display="block";$("sdt").textContent=t+" · "+x.sec+" · dati al "+x.date;
+  const[cx,w,h]=cv("sdc");cx.strokeStyle=css("--bl");cx.lineWidth=1.5;cx.beginPath();a.forEach((v,k)=>{const X=k/(n-1)*w,Y=h-4-(v-lo)/(hi-lo||1)*(h-8);k?cx.lineTo(X,Y):cx.moveTo(X,Y)});cx.stroke();
+  const O=x.opt||{};$("sdb").innerHTML=[["RV 20/60/126/252",[x.rv20,x.rv60,x.rv126,x.rv252].map(v=>f(v)).join(" / ")],["IV 30/60/90 (DTE)",[30,60,90].map(k=>O["iv"+k]!=null?f(O["iv"+k])+" ("+O["dte"+k]+"g)":"N/D").join(" / ")],
+   ["Spread IV−RV 30/60/90",[[30,x.rv21],[60,x.rv42],[90,x.rv63]].map(p=>O["iv"+p[0]]!=null?f(O["iv"+p[0]]-p[1]):"N/D").join(" / ")],["Variance premium 30g (pt²)",isFinite(x.vp)?f(x.vp,0):"N/D"],["Put skew 95%−ATM",isFinite(O.skew)?f(O.skew):"N/D"],
+   ["Beta S&P / Nasdaq",f(x.beta,2)+" / "+f(x.betaN,2)],["Vol idiosincratica / corr. S&P",f(x.idio)+" / "+f(x.corrM,2)],["Drawdown max 1a / attuale",f(x.dd*100,0)+"% / "+f(x.ddNow*100,0)+"%"],
+   ["Earnings / dividendo",(O.earn||"N/D")+" / "+(O.div||"N/D")],["Implied move earnings",isFinite(O.em)?"±"+f(O.em)+"%":"N/D"],["Qualità dati",x.q+"/100 · OHLC ok "+Math.round(x.okf*100)+"% · buchi "+x.gaps+" · ritardo "+x.lag+"g · "+x.n+" sedute"],["Salti anomali 1a (split? / ≥25% / outlier)",x.spl+" / "+x.big+" / "+x.outl+" · max |mov| "+f(x.mx)+"% il "+(x.mxd||"n/d")]].map(r=>rw(r[0],r[1])).join("")}
+// ---------- correlazioni ----------
+function corrMatrix(){const T=SCN.map(x=>x.s),N=T.length,Mx=Array.from({length:N},()=>Array(N).fill(NaN));
+  const dts=[...new Set(T.flatMap(t=>[...SER[t].R.keys()]))].sort();
+  const V=T.map(t=>dts.map(d=>SER[t].R.has(d)?SER[t].R.get(d):NaN));
+  for(let a=0;a<N;a++){Mx[a][a]=1;for(let b=a+1;b<N;b++){const p=[],q=[];for(let k=0;k<dts.length;k++)if(isFinite(V[a][k])&&isFinite(V[b][k])){p.push(V[a][k]);q.push(V[b][k])}
+    Mx[a][b]=Mx[b][a]=p.length>=200?corr(p,q):NaN}}
+  const pairs=[];for(let a=0;a<N;a++)for(let b=a+1;b<N;b++)if(isFinite(Mx[a][b]))pairs.push([T[a],T[b],Mx[a][b]]);
+  const av=pairs.length?mean(pairs.map(p=>p[2])):NaN,par=[...Array(N).keys()],fd=x=>par[x]==x?x:(par[x]=fd(par[x]));
+  pairs.filter(p=>p[2]>=num("ct",.7)).forEach(p=>par[fd(T.indexOf(p[0]))]=fd(T.indexOf(p[1])));
+  const gr={};T.forEach((t,k)=>(gr[fd(k)]=gr[fd(k)]||[]).push(t));
+  const sec={};SCN.forEach((x,k)=>(sec[x.sec]=sec[x.sec]||[]).push(k));
+  const sr=Object.keys(sec).map(s=>{const ix=sec[s],v=[];for(let a=0;a<ix.length;a++)for(let b=a+1;b<ix.length;b++)if(isFinite(Mx[ix[a]][ix[b]]))v.push(Mx[ix[a]][ix[b]]);return{s,n:ix.length,avg:v.length?mean(v):NaN,sh:ix.length/N,vol:mean(ix.map(k=>SCN[k].rv60).filter(isFinite))}}).sort((a,b)=>b.n-a.n);
+  CORR={T,Mx,av,neff:N/(1+(N-1)*av),top:pairs.sort((a,b)=>b[2]-a[2]).slice(0,10),groups:Object.values(gr).filter(g=>g.length>=2).sort((a,b)=>b.length-a.length),sr}}
+function renderCorr(){const C=CORR;if(!C)return;$("cr").innerHTML=rw("Correlazione media tra coppie (250g)",f(C.av,2))+rw("N. effettivo di titoli indipendenti (≈ N/(1+(N−1)·ρ))",f(C.neff,1)+" su "+C.T.length)+
+  "<table><tr><th>Settore</th><th>N</th><th>Peso</th><th>ρ intra</th><th>RV60 media</th></tr>"+C.sr.map(r=>`<tr><td>${esc(r.s)}</td><td>${r.n}</td><td>${f(r.sh*100,0)}%</td><td>${f(r.avg,2)}</td><td>${f(r.vol)}</td></tr>`).join("")+"</table>"+
+  "<div class=\"note\" style=\"margin-top:6px\"><b>Coppie più correlate:</b> "+C.top.map(p=>esc(p[0])+"–"+esc(p[1])+" "+f(p[2],2)).join(" · ")+"</div>"+
+  "<div class=\"note\" style=\"margin-top:6px\"><b>Gruppi (ρ ≥ "+num("ct",.7)+", componenti connesse):</b> "+(C.groups.length?C.groups.map(g=>esc(g.join(" "))).join(" | "):"nessuno")+"</div>"}
+// ---------- backtest TOP 100 (point-in-time sui soli prezzi; NON è un backtest di opzioni) ----------
+function stt(a,h){if(a.length<5)return null;const o=[...a].sort((x,y)=>x-y),m=mean(a),s=sd(a),dn=Math.sqrt(mean(a.map(x=>Math.min(x,0)**2))),ps=a.filter(x=>x>0).reduce((x,y)=>x+y,0),ng=-a.filter(x=>x<0).reduce((x,y)=>x+y,0);
+  let c=0,pk=0,dd=0;a.forEach(x=>{c+=x;pk=Math.max(pk,c);dd=Math.max(dd,pk-c)});const k=Math.max(1,Math.floor(a.length*.05));
+  return{n:a.length,mean:m,med:qt(o,.5),hit:a.filter(x=>x>0).length/a.length,sh:s>0?m/s*Math.sqrt(252/h):NaN,so:dn>0?m/dn*Math.sqrt(252/h):NaN,pf:ng>0?ps/ng:NaN,dd,es:mean(o.slice(0,k))}}
+function backtest(){const cost=num("bc",10)/1e4,T=SCN.map(x=>x.s),sg={"z≤−1 (RV compressa)":z=>z<=-1,"z≥+1 (RV espansa)":z=>z>=1,"tutti i giorni (benchmark)":z=>true},res=[];
+  const dates=[...new Set(T.flatMap(t=>SER[t].ds))].sort(),cut=dates[Math.floor(dates.length*.6)];
+  for(const h of[5,10,21,42])for(const[nm,fn]of Object.entries(sg)){const by={};
+    T.forEach(t=>{const S=SER[t];for(let j=273;j+h<S.cl.length;j++){const z=S.zs[j];if(!isFinite(z)||!fn(z))continue;const r=S.cl[j+h]/S.cl[j]-1-cost,d=S.ds[j];(by[d]=by[d]||[]).push(r)}});
+    const ds=Object.keys(by).sort();
+    for(const[sm,sel]of[["in-sample (60% iniziale)",d=>d<=cut],["out-of-sample (40% finale)",d=>d>cut]]){const d2=ds.filter(sel),th=d2.filter((d,k)=>k%h==0).map(d=>mean(by[d])),s=stt(th,h);
+      res.push({h,sig:nm,camp:sm,pool:d2.reduce((a,d)=>a+by[d].length,0),...(s||{})})}}
+  BTR={res,cost}}
+function renderBT(){const B=BTR;if(!B)return;const p=(x,d=1)=>isFinite(x)?f(x*100,d)+"%":"n/d";
+  $("bt").innerHTML="<table><tr><th>h</th><th>Segnale</th><th>Campione</th><th>n</th><th>Medio</th><th>Mediano</th><th>Hit</th><th>Sharpe</th><th>Sortino</th><th>PF</th><th>MaxDD</th><th>ES5%</th></tr>"+
+  B.res.map(r=>r.n?`<tr><td>${r.h}</td><td>${esc(r.sig)}</td><td>${esc(r.camp)}</td><td>${r.n}</td><td>${p(r.mean,2)}</td><td>${p(r.med,2)}</td><td>${p(r.hit,0)}</td><td>${f(r.sh,2)}</td><td>${f(r.so,2)}</td><td>${f(r.pf,2)}</td><td>${p(r.dd)}</td><td>${p(r.es,2)}</td></tr>`:`<tr><td>${r.h}</td><td>${esc(r.sig)}</td><td>${esc(r.camp)}</td><td colspan="9">n/d (campione troppo piccolo)</td></tr>`).join("")+"</table>"}
+// ---------- download dati / orchestrazione ----------
+async function runScan(){
+  if(!D||!ROWS||!AX){n2("sm2","Dati indice non pronti: attendi il caricamento",true);return}
+  const b=$("sb");b.disabled=true;SCAN_RUNNING=true;SCAN_REV++;SCAN_CONTEXT="";invalidateLS("Scanner ricaricato: ricalcolare LONG/SHORT");SCN=[];SER={};CORR=null;BTR=null;const startContext=contextKey();const list=[...new Set($("tk").value.toUpperCase().split(/[\s,;]+/).filter(x=>/^[A-Z0-9.\-]{1,10}$/.test(x)).map(x=>ALIAS[x]||x))],L=ROWS[ROWS.length-1],err={},res={};let k=0,dn=0;
+  try{let NX=null;try{NX=await stkGet("^NDX")}catch(e){}
+    const wk=async()=>{while(k<list.length){const s=list[k++];try{res[s]=await stkGet(s)}catch(e){err[s]=String(e&&e.message||e)}n2("sm2","Prezzi "+(++dn)+"/"+list.length+"…")}};await Promise.all(Array.from({length:5},wk));
+    if(!D||!ROWS||!AX||startContext!==contextKey())throw new Error("dati o impostazioni cambiati durante il download: riprova");
+    const bad=[];list.forEach(s=>{if(!res[s]){bad.push(s+": download");return}const x=scanOne(s,res[s],L,NX);x.st?bad.push(s+": "+x.st):SCN.push(x)});
+    if($("so").checked){let q=0,d2=0,ok=0;const oe={};const wo=async()=>{while(q<SCN.length){const x=SCN[q++];try{x.opt=await optGet(x.s,x.close);if(isFinite(x.opt.iv30))ok++;else{x.opt.err="nessuna IV30 nella catena";oe[x.opt.err]=(oe[x.opt.err]||0)+1}}catch(e){const m=String(e&&e.message||e).slice(0,60);x.opt={err:m};oe[m]=(oe[m]||0)+1}n2("sm2","Opzioni "+(++d2)+"/"+SCN.length+"…")}};await Promise.all(Array.from({length:3},wo));
+      SCN.forEach(x=>{const O=x.opt||{};x.ivs=O.iv30!=null?O.iv30:NaN;x.rvm=x.rv21;x.sp=isFinite(x.ivs)?x.ivs-x.rv21:NaN;x.vp=isFinite(x.ivs)?x.ivs**2-x.rv21**2:NaN;x.earnD=O.earnD!=null?O.earnD:NaN});
+      OPTSTAT=ok+" / "+SCN.length+" con IV30"+(Object.keys(oe).length?" · errori: "+Object.entries(oe).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]+" ×"+e[1]).join("; "):"");
+      if(!ok)n2("sm2","Opzioni non disponibili ("+(Object.keys(oe)[0]||"n/d")+"). Se è HTTP 401/403/429 il Worker deve gestire cookie+crumb di Yahoo: vedi worker_yahoo_crumb.js",true)}
+    else{OPTSTAT="non richieste (casella spenta)";SCN.forEach(x=>{x.ivs=NaN;x.sp=NaN;x.vp=NaN;x.earnD=NaN})}
+    if(startContext!==contextKey())throw new Error("contesto cambiato durante il download: ricaricare scanner");score();corrMatrix();backtest();SCAN_CONTEXT=startContext;$("sa").style.display="block";renderScan();renderCorr();renderBT();
+    const sec=[...new Set(SCN.map(x=>x.sec))].sort();$("ss").innerHTML="<option value=\"\">Tutti i settori</option>"+sec.map(s=>`<option>${esc(s)}</option>`).join("");
+    const av=SCN.length?Math.round(mean(SCN.map(x=>x.q))):0;
+    $("dq").innerHTML=rw("Titoli analizzati",SCN.length+" / "+list.length)+rw("Qualità media dati",av+"/100")+rw("Con ritardo > 0 sedute",SCN.filter(x=>x.lag>0).length)+rw("Con OHLC incoerenti/buchi (>2%)",SCN.filter(x=>x.okf<.98||x.gaps>0).length)+rw("Con salti anomali (split/≥25%/outlier)",(()=>{const a=SCN.filter(x=>x.spl+x.big+x.outl>0);return a.length+(a.length?": "+a.slice(0,12).map(x=>x.s+(x.spl?" (split?)":"")).join(", ")+(a.length>12?"…":""):"")})())+rw("Opzioni",OPTSTAT)+
+      "<div class=\"note\">Esclusi: "+(bad.length?esc(bad.slice(0,15).join("; "))+(bad.length>15?"…":""):"nessuno")+" · Fonte: Yahoo Finance (Worker) · cache 5 min · "+new Date().toLocaleString("it-IT")+"</div>";
+    n2("sm2","Completato: "+SCN.length+" titoli"+(bad.length?", "+bad.length+" esclusi":""),bad.length>0)
+  }catch(e){SCAN_CONTEXT="";SCN=[];SER={};CORR=null;BTR=null;$("sa").style.display="none";n2("sm2","Errore: "+(e&&e.message||e),true)}finally{SCAN_RUNNING=false;b.disabled=false}}
+// ---------- esportazioni ----------
+function csvOut(H,R,name){dl("\ufeff"+[H.join(","),...R.map(r=>r.map(fm2).join(","))].join("\n"),name+".csv","text/csv")}
+function expo(){if(!SCN.length){n2("sm2","Esegui prima lo scanner",true);return}const t=$("xt").value,O=x=>x.opt||{};
+  if(t=="full")csvOut(["ticker","settore","data","close","var_1g","rv20","rv60","rv126","rv252","iv30","iv60","iv90","spread_iv_rv_30","z_rv20","pct","beta_spx","beta_ndx","idio","dd_252","dd_attuale","earnings","giorni_earn","anom","vol","vrp","qualita","tot","split_sospetti","salti_25pct","outlier","max_mov_1g_pct","data_max_mov"],
+    SCN.map(x=>[x.s,x.sec,x.date,x.close,x.d1,x.rv20,x.rv60,x.rv126,x.rv252,O(x).iv30,O(x).iv60,O(x).iv90,x.sp,x.z,x.pc,x.beta,x.betaN,x.idio,x.dd,x.ddNow,O(x).earn,x.earnD,x.sa,x.sv,x.sr,x.sq,x.tot,x.spl,x.big,x.outl,x.mx,x.mxd]),"scanner_top100");
+  else if(t=="vrp")csvOut(["ticker","data","iv30","dte30","iv60","dte60","iv90","dte90","rv21","rv42","rv63","spread_vol_30","spread_vol_60","spread_vol_90","spread_var_30","put_skew_95_atm","implied_move_earn","giorni_earn","stato"],
+    SCN.map(x=>{const o=O(x);return[x.s,x.date,o.iv30,o.dte30,o.iv60,o.dte60,o.iv90,o.dte90,x.rv21,x.rv42,x.rv63,o.iv30-x.rv21,o.iv60-x.rv42,o.iv90-x.rv63,x.vp,o.skew,o.em,x.earnD,o.iv30!=null?"ok":"IV N/D"]}),"vrp_individuale");
+  else if(t=="anom")csvOut(["ticker","settore","z_rv20","percentile_1a","rv20","anomaly_score"],SCN.map(x=>[x.s,x.sec,x.z,x.pc,x.rv20,x.sa]),"anomalie");
+  else if(t=="risk")csvOut(["ticker","settore","rv60","rv252","beta_spx","beta_ndx","corr_spx","vol_idio","dd_252","vol_score"],SCN.map(x=>[x.s,x.sec,x.rv60,x.rv252,x.beta,x.betaN,x.corrM,x.idio,x.dd,x.sv]),"rischio");
+  else if(t=="corr"){if(!CORR)return;csvOut(["ticker",...CORR.T],CORR.Mx.map((r,k)=>[CORR.T[k],...r]),"correlazioni")}
+  else if(t=="sig")csvOut(["ticker","segnale_rv","z_rv20","score_totale","qualita","nota"],SCN.map(x=>[x.s,x.z<=-1?"rv_compressa":x.z>=1?"rv_espansa":"neutro",x.z,x.tot,x.q,"anomalia statistica, non segnale direzionale"]),"segnali");
+  else if(BTR)csvOut(["orizzonte","segnale","campione","n","media","mediana","hit","sharpe","sortino","profit_factor","maxdd","es5","costo_bps"],BTR.res.map(r=>[r.h,r.sig,r.camp,r.n,r.mean,r.med,r.hit,r.sh,r.so,r.pf,r.dd,r.es,BTR.cost*1e4]),"backtest_top100")}
+// ---------- eventi UI ----------
+$("sb").onclick=runScan;$("xb").onclick=expo;
+["sf","ss","sz","sp","sqm"].forEach(id=>$(id).addEventListener("input",()=>SCN.length&&renderScan()));
+['wa','wv','wr','wq','scs'].forEach(id=>$(id).addEventListener("change",()=>{if(SCN.length){score();renderScan();invalidateLS('Pesi scanner cambiati: ricalcolare LONG/SHORT')}}));
+$("ct").addEventListener("change",()=>{if(SCN.length){corrMatrix();renderCorr()}});$("bc").addEventListener("change",()=>{if(SCN.length){backtest();renderBT()}});
+$("sc").addEventListener("click",e=>{const th=e.target.closest("th[data-k]");if(th){const k=th.dataset.k;SSORT=SSORT.k==k?{k,d:-SSORT.d}:{k,d:k=="s"||k=="sec"?1:-1};renderScan();return}const tr=e.target.closest("tr[data-t]");if(tr)detail(tr.dataset.t)});
+</script><script>
+// ===== MODULO LONG/SHORT: valutazione + trend + regime VIX. Nessun dato inventato: N/D dove la fonte non risponde =====
+// ==LSCORE-START==
+const LSC=(()=>{
+const LS={W:{val:.25,qual:.15,trend:.30,reg:.10,risk:.20},TH:{cand:65,gap:20,wl:55,wgap:10,minDC:60,insDC:40,minCov:.6},
+ RG:{"Mercato tranquillo":[100,70],"Volatilità in aumento":[60,85],"Stress elevato":[35,70],"Stress in attenuazione":[60,45],"Volatilità in normalizzazione":[85,55],"Regime misto":[70,65],"N/D":[null,null]}};
+const cl=(x,a=0,b=100)=>Math.min(b,Math.max(a,x)),th=(x,k)=>cl(50+50*Math.tanh(x/k)),nn=v=>typeof v=="number"&&isFinite(v)?v:null,
+ av=a=>{a=a.filter(x=>x!=null);return a.length?a.reduce((p,q)=>p+q,0)/a.length:null},pk=(a,x)=>a.length?a.filter(y=>y<=x).length/a.length*100:null;
+const rv=o=>o==null?null:typeof o=="object"?(o.raw!=null?nn(o.raw):null):nn(o);
+function parseFund(j){const r=j&&j.quoteSummary&&j.quoteSummary.result&&j.quoteSummary.result[0];if(!r)return null;
+ const sd=r.summaryDetail||{},ks=r.defaultKeyStatistics||{},fd=r.financialData||{},ap=r.assetProfile||{},pr=r.price||{},
+  et=((r.earningsTrend||{}).trend||[]).find(t=>t&&t.period=="+1y"),o={tpe:rv(sd.trailingPE),fpe:rv(sd.forwardPE)??rv(ks.forwardPE),epsT:rv(ks.trailingEps),epsF:rv(ks.forwardEps),
+  g:et?rv(et.growth):null,gs:null,rg:rv(fd.revenueGrowth),peg:rv(ks.pegRatio),ps:rv(sd.priceToSalesTrailing12Months),eve:rv(ks.enterpriseToEbitda),opm:rv(fd.operatingMargins),
+  mc:rv(pr.marketCap)??rv(sd.marketCap),sec:ap.sector||null,ind:ap.industry||null},fcf=rv(fd.freeCashflow);
+ o.fcfy=fcf!=null&&o.mc>0?fcf/o.mc:null;
+ if(o.g!=null)o.gs="analisti";else if(o.epsT>0&&o.epsF!=null){o.g=o.epsF/o.epsT-1;o.gs="derivata"}
+ return o}
+const loss=f=>f.epsF!=null?f.epsF<=0:(f.epsT!=null&&f.epsT<=0);
+function valuation(f,P){const fl=[],cp={};if(!f)return{v:null,cov:0,fl:["fondamentali N/D"],cp};
+ const ls=loss(f),rk=(a,x)=>a.length>=5?100-pk(a,x):null;if(ls)fl.push("utili negativi/assenti: PE e PEG esclusi, valutazione limitata a 50");
+ if(!ls&&f.fpe>0){cp.pe=rk(P.pe,Math.min(f.fpe,200));if(f.fpe>100)fl.push("Forward P/E estremo (>100, winsorizzato a 200)");
+  if(f.g!=null){cp.peg=f.g>0?cl(100*(2.5-f.fpe/(f.g*100))/2):0;if(f.g<=0)fl.push("crescita EPS prevista ≤ 0")}else fl.push("crescita EPS N/D: PEG escluso")}
+ else if(f.fpe!=null&&!ls)fl.push("Forward P/E non significativo");else if(!ls)fl.push("Forward P/E N/D");
+ if(f.eve>0)cp.eve=rk(P.eve,Math.min(f.eve,100));if(f.fcfy!=null)cp.fcf=cl(f.fcfy/.06*100);
+ if((ls||!(f.fpe>0))&&f.ps>0)cp.ps=rk(P.ps,Math.min(f.ps,50));
+ const w={pe:.3,peg:.25,eve:.15,fcf:.2,ps:.1};let t=0,a=0;for(const k in cp)if(cp[k]!=null){t+=cp[k]*w[k];a+=w[k]}
+ let v=a?t/a:null;if(v!=null&&ls)v=Math.min(v,50);return{v,cov:a?Math.min(1,a/(ls?.45:.9)):0,fl,cp}}
+const qual=f=>f?av([f.opm!=null?cl(f.opm/.3*100):null,f.rg!=null?th(f.rg,.2):null,f.g!=null?th(f.g,.25):null]):null;
+function trend(c,b){const n=c?c.length:0;if(n<260||!c.every(x=>x>0))return null;
+ for(let j=n-252;j<n;j++){const ratio=c[j]/c[j-1];if([2,3,4,5,10,20].some(v=>(Math.abs(ratio*v-1)<.04||Math.abs(ratio/v-1)<.04)&&Math.abs(Math.log(ratio))>.3))return null;}const r=h=>c[n-1]/c[n-1-h]-1,br=h=>b&&b[n-1]>0&&b[n-1-h]>0?b[n-1]/b[n-1-h]-1:null,
+ sma=(k,e=n)=>{let s=0;for(let j=e-k;j<e;j++)s+=c[j];return s/k},H=[[21,.08],[63,.15],[126,.25]],m=av(H.map(([h,k])=>th(r(h),k))),
+ rs=av(H.map(([h,k])=>{const x=br(h);return x==null?null:th(r(h)-x,k)})),m50=sma(50),m200=sma(200),sl=m50/sma(50,n-20)-1;let p=0;for(let j=n-252;j<n;j++)p=Math.max(p,c[j]);const dd=c[n-1]/p-1;
+ const P=[[.25,m],[.25,rs],[.10,th(c[n-1]/m50-1,.08)],[.10,th(c[n-1]/m200-1,.15)],[.15,th(sl,.04)],[.15,cl(100+dd*200)]];let t=0,w=0;P.forEach(([x,v])=>{if(v!=null){t+=x*v;w+=x}});
+ return{t:t/w,r1:r(21),r3:r(63),r6:r(126),d50:c[n-1]/m50-1,d200:c[n-1]/m200-1,m50,m200,sl,dd,rsN:rs==null}}
+function regime(I){if(!I||I.stale||I.vix==null||I.d5==null)return{n:"N/D",r:LS.RG["N/D"]};const{vix:v,d5,pct,max20,rg,v9}=I;let n;
+ if(rg==4||v>=30||(pct!=null&&pct>=90&&rg>=3))n="Stress elevato";else if(d5>=2||(v9!=null&&v9>v&&d5>0))n="Volatilità in aumento";
+ else if(pct!=null&&pct>=70&&d5<=-2)n="Stress in attenuazione";else if(max20>=1.3*v&&(pct==null||pct<70)&&d5<=0)n="Volatilità in normalizzazione";
+ else if(pct!=null&&pct<50&&rg!=null&&rg<=2&&Math.abs(d5)<2)n="Mercato tranquillo";else n="Regime misto";return{n,r:LS.RG[n]}}
+const side=(p,W)=>{let t=0,w=0,tot=0;for(const k in W){tot+=W[k];if(p[k]!=null){t+=p[k]*W[k];w+=W[k]}}return{s:w?t/w:null,cov:w/tot}};
+function compute(it,I){const R=regime(I),U={pe:[],eve:[],ps:[]},B={},ex=f=>({pe:f.fpe>0&&!loss(f)?Math.min(f.fpe,200):null,eve:f.eve>0?Math.min(f.eve,100):null,ps:f.ps>0?Math.min(f.ps,50):null});
+ it.forEach(x=>{if(!x.f)return;const e=ex(x.f);for(const k in U)if(e[k]!=null){U[k].push(e[k]);(B[x.sec]=B[x.sec]||{pe:[],eve:[],ps:[]})[k].push(e[k])}});
+ const T=it.map(x=>trend(x.c,x.bm)),rvA=it.map(x=>x.rv60).filter(x=>x!=null&&isFinite(x)),m1A=T.filter(Boolean).map(t=>t.r1);
+ return it.map((x,i)=>{const tr=T[i],fl=[],sec=x.sec&&x.sec!="N/D"?x.sec:null,pp={},fb=[];
+  for(const k in U){const s=sec&&B[sec]&&B[sec][k].length>=5;pp[k]=s?B[sec][k]:U[k];if(!s)fb.push(k)}
+  if(!sec)fl.push("settore sconosciuto: peer = universo");else if(fb.length&&x.f)fl.push("peer < 5 nel settore per "+fb.join("/")+": confronto con l'universo");
+  const va=valuation(x.f,pp),q=qual(x.f),v=va.v,t=tr?tr.t:null;fl.push(...va.fl);if(tr&&tr.rsN)fl.push("S&P non allineato: forza relativa N/D");
+  if(!tr)fl.push("storico insufficiente per il trend (<260 sedute)");
+  const rkL=rvA.length&&x.rv60!=null?100-pk(rvA,x.rv60):null,sq=tr&&x.rv60!=null?av([pk(rvA,x.rv60),pk(m1A,tr.r1)]):null,rkS=sq==null?null:100-sq,
+   Ls=side({val:v,qual:q,trend:t,reg:R.r[0],risk:rkL},LS.W),Ss=side({val:v==null?null:100-v,qual:q==null?null:100-q,trend:t==null?null:100-t,reg:R.r[1],risk:rkS},LS.W);
+  let L=Ls.s,S=Ss.s;if(v==null||t==null){L=S=null}else{if(t<35)L=Math.min(L,49);if(t>65)S=Math.min(S,49)}
+  const fq=x.f?(x.f.fpe!=null?(x.f.gs=="analisti"?1:.7):.3):0,dc=Math.round(100*(.35*va.cov+.15*(q!=null?1:0)+.30*(x.q||0)/100+.20*fq)),
+   o={s:x.s,sec:x.sec,f:x.f,v,q,t,tr,rn:R.n,rg:R.r,L,S,dc,cov:Ls.cov,vcov:va.cov,cp:va.cp,rkL,sq,fl};o.sig=classify(o);o.why=why(o);return o})}
+function classify(x){const T=LS.TH,{L,S,dc,v,t}=x;if(L==null||S==null||dc<T.insDC||x.cov<T.minCov)return"DATI INSUFFICIENTI";
+ if(L>=T.cand&&L-S>=T.gap&&t>=50&&v>=55&&dc>=T.minDC)return x.rn=="Stress elevato"?"WATCHLIST LONG":"LONG candidato";
+ if(S>=T.cand&&S-L>=T.gap&&t<=50&&v<=45&&dc>=T.minDC)return x.rn=="Stress in attenuazione"||x.sq>=80?"WATCHLIST SHORT":"SHORT candidato";
+ if(L>=T.wl&&L-S>=T.wgap)return"WATCHLIST LONG";if(S>=T.wl&&S-L>=T.wgap)return"WATCHLIST SHORT";return"NEUTRALE"}
+function why(x){const P=[],C=[],I=[];if(x.L==null)return{P,C,I};const lg=x.L>=x.S,a=(c,p,n)=>(c?P:C).push(c?p:n),r=Math.round;
+ if(lg){a(x.v>=60,"valutazione relativa interessante ("+r(x.v)+")","valutazione non favorevole ("+r(x.v)+")");a(x.t>=60,"trend e forza relativa positivi ("+r(x.t)+")","trend debole o neutro ("+r(x.t)+")");
+  if(x.q!=null)a(x.q>=60,"qualità/crescita buone ("+r(x.q)+")","qualità/crescita modeste ("+r(x.q)+")");if(x.rg[0]!=null)a(x.rg[0]>=70,"regime "+x.rn+" compatibile","regime "+x.rn+": compatibilità limitata");
+  if(x.rkL!=null)a(x.rkL>=50,"volatilità specifica contenuta","volatilità specifica elevata");
+  I.push("chiusura sotto SMA200"+(x.tr?" ("+x.tr.m200.toFixed(2)+")":""),"regime → Stress elevato","stime EPS forward riviste al ribasso (revisioni non monitorate)")}
+ else{a(x.v<=40,"valutazione relativamente elevata ("+r(x.v)+")","valutazione non eccessiva ("+r(x.v)+")");a(x.t<=40,"trend e forza relativa deboli ("+r(x.t)+")","trend non ribassista ("+r(x.t)+")");
+  if(x.q!=null)a(x.q<=40,"qualità/crescita in deterioramento ("+r(x.q)+")","qualità/crescita non deboli ("+r(x.q)+")");if(x.rg[1]!=null)a(x.rg[1]>=70,"regime "+x.rn+" compatibile","regime "+x.rn+": compatibilità limitata");
+  if(x.sq!=null)a(x.sq<50,"rischio short-squeeze contenuto (proxy: vol. e rally recente; short interest N/D)","rischio short-squeeze elevato (proxy; short interest N/D)");
+  I.push("chiusura sopra SMA50"+(x.tr?" ("+x.tr.m50.toFixed(2)+")":"")+" con forza relativa in recupero","regime → Stress in attenuazione (rimbalzi)","revisioni EPS al rialzo (non monitorate)")}
+ x.fl.forEach(z=>C.push(z));return{P,C,I}}
+const SIGO={"LONG candidato":0,"WATCHLIST LONG":1,"NEUTRALE":2,"WATCHLIST SHORT":3,"SHORT candidato":4,"DATI INSUFFICIENTI":5};
+function fs(R,o){const nul=v=>v==null||(typeof v=="number"&&!isFinite(v)),k=o.k||"L",d=o.d||-1;
+ return R.filter(x=>(!o.sec||x.sec==o.sec)&&(!(o.pmin>0)||(x.f&&x.f.fpe>=o.pmin))&&(!(o.pmax>0)||(x.f&&x.f.fpe>0&&x.f.fpe<=o.pmax))&&x.dc>=(o.dc||0)&&x.vcov*100>=(o.cov||0)&&(!o.sg||x.sig==o.sg)&&(!o.reg||(x.L!=null&&(x.L>=x.S?x.rg[0]:x.rg[1])>=50)))
+ .sort((a,b)=>{const g=x=>k=="fpe"?(x.f?x.f.fpe:null):k=="sig"?SIGO[x.sig]:x[k],u=g(a),v=g(b);if(nul(u)||nul(v))return nul(u)-nul(v);return(u<v?-1:u>v?1:0)*d})}
+const CH=["ticker","settore","fwd_pe","trailing_pe","eps_trailing","eps_forward","crescita_eps","fonte_crescita","crescita_ricavi","peg_yahoo","price_sales","ev_ebitda","margine_operativo","fcf_yield","market_cap","valuation","qualita","trend","mom_1m","mom_3m","mom_6m","dist_sma50","dist_sma200","dd_252","regime_vix","long","short","confidenza","copertura_valutazione","segnale","note"];
+const csv=R=>({H:CH,R:R.map(x=>{const f=x.f||{},t=x.tr||{},z=v=>v==null?"":v;return[x.s,x.sec,f.fpe,f.tpe,f.epsT,f.epsF,f.g,f.gs,f.rg,f.peg,f.ps,f.eve,f.opm,f.fcfy,f.mc,x.v,x.q,x.t,t.r1,t.r3,t.r6,t.d50,t.d200,t.dd,x.rn,x.L,x.S,x.dc,Math.round(x.vcov*100),x.sig,x.fl.join(" | ")].map(z)})});
+return{LS,parseFund,valuation,qual,trend,regime,compute,classify,fs,csv,why}})();
+// ==LSCORE-END==
+// ---------- interfaccia ----------
+let LR=[],LSORT={k:"L",d:-1},LRUN=0;const FC={},FT={};
+let SCAN_REV=0,LS_REV=-1,SCAN_CONTEXT="",LS_CONTEXT="",SCAN_RUNNING=false,LS_RUNNING=false;
+const contextKey=()=>JSON.stringify({sym:D?.sym||"",date:ROWS?.at(-1)?.d||"",vix:ROWS?.at(-1)?.vix??null,vrp:ROWS?.at(-1)?.vrp??null,stale:STALE,err:ERR||"",est:$("se").value,win:$("sw").value,tk:$("tk").value,options:$("so").checked});
+function invalidateLS(reason){LRUN++;LR=[];LS_REV=-1;LS_CONTEXT="";$("la").style.display="none";$("ld").style.display="none";$("lt").innerHTML="";$("lm").textContent=reason||"Ranking da ricalcolare";$("lb").disabled=false}
+function scanCurrent(){return !SCAN_RUNNING&&SCN.length>0&&SCAN_CONTEXT===contextKey()}
+function lsCurrent(){return !LS_RUNNING&&scanCurrent()&&LR.length>0&&LS_REV===SCAN_REV&&LS_CONTEXT===contextKey()}
+function exportCheck(){const notes=[];if(!ROWS?.length||!AX||!D)notes.push("storico VIX non pronto");if(STALE||ERR)notes.push("VIX obsoleto");if(SCAN_RUNNING||LS_RUNNING)notes.push("elaborazione in corso");if(!scanCurrent())notes.push("scanner non eseguito o non sincronizzato");if(!lsCurrent())notes.push("LONG/SHORT non eseguito o non sincronizzato");return notes}
+
+async function fundGet(s){
+ if(FC[s]&&Date.now()-FT[s]<18e5)return FC[s];
+ const u=W+"/fundamentals?symbol="+encodeURIComponent(s);
+ const j=await fj(u,1);
+ const o=LSC.parseFund(j);
+ if(!o)throw new Error(j&&j.error?j.error:"risposta fondamentali senza dati");
+ FC[s]=o;FT[s]=Date.now();return o;
+}
+function regInfo(){if(!D||!ROWS||STALE)return{stale:true};const L=ROWS[ROWS.length-1],vx=asof(D.vix,L.d),n=vx.length;if(n<30)return{stale:true};const v=vx[n-1],k9=D.v9&&D.v9.get(L.d);
+ return{vix:v,d5:v-vx[n-6],pct:pr(vx.slice(-252),v),max20:Math.max(...vx.slice(-20)),rg:L.rg,v9:k9?k9.c:null}}
+async function runLS(){const my=++LRUN,b=$("lb");if(!scanCurrent()){n2("lm","Scanner assente, in corso o non sincronizzato: ricaricalo",true);return}
+ b.disabled=true;LS_RUNNING=true;const scanRev=SCAN_REV,startContext=contextKey();const items=SCN.filter(x=>SER[x.s]).map(x=>({s:x.s,sec:x.sec,q:x.q,rv60:x.rv60,f:null})),er={};let k=0,dn=0,ok=0;
+ const wk=async()=>{while(k<items.length){const it=items[k++];try{it.f=await fundGet(it.s);ok++}catch(e){const m=String(e&&e.message||e).slice(0,50);er[m]=(er[m]||0)+1}if(my===LRUN)n2("lm","Fondamentali "+(++dn)+"/"+items.length+"…")}};
+ try{await Promise.all(Array.from({length:4},wk));if(my!==LRUN)return;if(scanRev!==SCAN_REV||startContext!==contextKey()||!scanCurrent())throw new Error("scanner o VIX cambiati: ripetere analisi");
+  items.forEach(it=>{const S=SER[it.s];it.c=S.cl;it.bm=S.ds.map(d=>{const q=D.spx.get(d);return q?q.c:null})});
+  const RI=regInfo();LR=LSC.compute(items,RI);LS_REV=scanRev;LS_CONTEXT=startContext;$("la").style.display="block";
+  $("ls1").innerHTML='<option value="">Tutti i settori</option>'+[...new Set(LR.map(x=>x.sec))].sort().map(s=>`<option>${esc(s)}</option>`).join("");
+  $("lrg").innerHTML=RI.stale?"Regime VIX: N/D (dati indice obsoleti): la componente regime è esclusa dai punteggi":"Regime VIX: <b>"+esc(LR[0]?LR[0].rn:"N/D")+"</b> · VIX "+f(RI.vix)+" · Δ5g "+sg(RI.d5)+" · percentile 1a "+(RI.pct==null?"n/d":RI.pct+"°")+" · curva "+(ROWS[ROWS.length-1].rg==null?"n/d":RGN[ROWS[ROWS.length-1].rg])+(RI.v9!=null?" · VIX9D "+f(RI.v9):"");
+  renderLS();const m=Object.entries(er).sort((a,c)=>c[1]-a[1]).slice(0,2).map(e=>e[0]+" ×"+e[1]).join("; ");
+  n2("lm","Fondamentali: "+ok+"/"+items.length+(m?" · errori: "+m:"")+(ok==0?" · nessun fondamentale: tutti i titoli risultano DATI INSUFFICIENTI. HTTP 401/403: Yahoo potrebbe non autorizzare quoteSummary anche con cookie+crumb; serve una fonte alternativa":""),ok<items.length)
+ }catch(e){invalidateLS("Errore LONG/SHORT: "+(e&&e.message||e));n2("lm","Errore: "+(e&&e.message||e),true)}finally{LS_RUNNING=false;if(my===LRUN)b.disabled=false}}
+const LC=[["s","Ticker"],["fpe","Fwd P/E"],["v","Valuation"],["t","Trend"],["rn","Regime VIX"],["L","LONG"],["S","SHORT"],["dc","Confid."],["sig","Segnale"]],r0=x=>x==null?"N/D":Math.round(x);
+function renderLS(){const R=LSC.fs(LR,{k:LSORT.k,d:LSORT.d,sec:$("ls1").value,pmin:num("lpa",0),pmax:num("lpb",0),dc:num("ldc",0),cov:num("lcv",0),sg:$("lsg").value,reg:$("lrc").checked});
+ const cls=s=>s=="LONG candidato"?"z":s=="SHORT candidato"?"p":s.startsWith("WATCH")?"n":"";
+ $("lt").innerHTML="<tr>"+LC.map(c=>`<th data-k="${c[0]}" style="cursor:pointer">${c[1]}${LSORT.k==c[0]?(LSORT.d>0?"▲":"▼"):""}</th>`).join("")+"</tr>"+
+ R.map(x=>`<tr data-t="${esc(x.s)}"><td>${esc(x.s)}</td><td>${x.f&&x.f.fpe!=null?f(x.f.fpe,1):"N/D"}</td><td>${r0(x.v)}</td><td>${r0(x.t)}</td><td>${esc(x.rn)}</td><td>${r0(x.L)}</td><td>${r0(x.S)}</td><td>${x.dc}</td><td class="${cls(x.sig)}">${esc(x.sig)}</td></tr>`).join("");
+ const tp=(sg2,k)=>{const a=LR.filter(x=>x.sig==sg2).sort((p,q)=>q[k]-p[k]).slice(0,10);return a.length?a.map(x=>esc(x.s)+" "+r0(x[k])).join(" · "):"nessun candidato: le evidenze non sono coerenti o i dati sono insufficienti"};
+ $("ltp").innerHTML="<b>Migliori LONG candidati:</b> "+tp("LONG candidato","L")+"<br><b>Migliori SHORT candidati:</b> "+tp("SHORT candidato","S");
+ $("ln").textContent=R.length+" / "+LR.length+" titoli · candidati LONG "+LR.filter(x=>x.sig=="LONG candidato").length+", SHORT "+LR.filter(x=>x.sig=="SHORT candidato").length+", dati insufficienti "+LR.filter(x=>x.sig=="DATI INSUFFICIENTI").length}
+function detailLS(t){const x=LR.find(y=>y.s==t);if(!x)return;const F=x.f||{},T=x.tr,p=(v,d=1)=>v==null?"N/D":f(v*100,d)+"%",li=a=>a.length?'<ul style="margin:2px 0 6px;padding-left:18px">'+a.map(z=>"<li>"+esc(z)+"</li>").join("")+"</ul>":" nessuno";
+ $("ld").style.display="block";$("ldt").textContent=t+" · "+x.sec+" · "+x.sig;
+ $("ldb").innerHTML=rw("Forward / trailing P/E",(F.fpe!=null?f(F.fpe,1):"N/D")+" / "+(F.tpe!=null?f(F.tpe,1):"N/D"))+rw("EPS forward / trailing",(F.epsF!=null?f(F.epsF,2):"N/D")+" / "+(F.epsT!=null?f(F.epsT,2):"N/D"))+rw("Crescita EPS ("+(F.gs||"N/D")+") / ricavi",p(F.g)+" / "+p(F.rg))+
+  rw("PEG Yahoo / P/S / EV/EBITDA",(F.peg!=null?f(F.peg,2):"N/D")+" / "+(F.ps!=null?f(F.ps,2):"N/D")+" / "+(F.eve!=null?f(F.eve,1):"N/D"))+rw("Margine operativo / FCF yield",p(F.opm)+" / "+p(F.fcfy))+
+  rw("Valuation / qualità / trend",r0(x.v)+" / "+r0(x.q)+" / "+r0(x.t))+rw("Copertura valutazione / confidenza",Math.round(x.vcov*100)+"% / "+x.dc)+rw("Mom 1/3/6m",T?p(T.r1)+" / "+p(T.r3)+" / "+p(T.r6):"N/D")+rw("Dist. SMA50 / SMA200 · drawdown 1a",T?p(T.d50)+" / "+p(T.d200)+" · "+p(T.dd,0):"N/D")+
+  '<div style="margin-top:6px"><b>Elementi favorevoli</b>'+li(x.why.P)+"<b>Elementi contrari e avvertenze</b>"+li(x.why.C)+"<b>Condizioni che invaliderebbero l'ipotesi</b>"+li(x.why.I)+"</div>"}
+$("lb").onclick=runLS;["ls1","lpa","lpb","ldc","lcv","lsg","lrc"].forEach(id=>$(id).addEventListener("input",()=>LR.length&&renderLS()));
+$("lt").addEventListener("click",e=>{const h=e.target.closest("th[data-k]");if(h){const k=h.dataset.k;LSORT=LSORT.k==k?{k,d:-LSORT.d}:{k,d:k=="s"||k=="rn"?1:-1};renderLS();return}const r=e.target.closest("tr[data-t]");if(r)detailLS(r.dataset.t)});
+$("lx").onclick=()=>{if(!LR.length){n2("lm","Esegui prima l'analisi LONG/SHORT",true);return}const c=LSC.csv(LR);csvOut(c.H,c.R,"long_short_top100")};
+
+// ===== ESPORTAZIONE IN ZIP (nessuna libreria esterna) =====
+function zipCRC(bytes){let c=-1;for(const b of bytes){c^=b;for(let k=0;k<8;k++)c=(c>>>1)^((c&1)?0xEDB88320:0)}return(c^-1)>>>0}
+function makeZIP(files){
+ const enc=new TextEncoder(),chunks=[],central=[];let offset=0;
+ const u16=(v)=>[v&255,(v>>>8)&255],u32=(v)=>[v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255];
+ const append=a=>{chunks.push(a);offset+=a.length};
+ for(const f of files){const name=enc.encode(f.name),data=typeof f.content==='string'?enc.encode(f.content):f.content,crc=zipCRC(data),start=offset;
+  const local=new Uint8Array([80,75,3,4,...u16(20),...u16(0x800),...u16(0),...u16(0),...u16(0),...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0)]);
+  append(local);append(name);append(data);
+  central.push(new Uint8Array([80,75,1,2,...u16(20),...u16(20),...u16(0x800),...u16(0),...u16(0),...u16(0),...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(start),...name]));
+ }
+ const cs=offset;central.forEach(append);const clen=offset-cs;
+ append(new Uint8Array([80,75,5,6,...u16(0),...u16(0),...u16(files.length),...u16(files.length),...u32(clen),...u32(cs),...u16(0)]));
+ return new Blob(chunks,{type:'application/zip'});
+}
+function downloadBlob(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)}
+function jsonExport(x){return JSON.stringify(x,(k,v)=>typeof v==='number'&&!Number.isFinite(v)?null:v instanceof Map?Object.fromEntries(v):v instanceof Set?[...v]:v,2)}
+function csvEsc(x){let s=x==null?'':String(x);if(/^[\s]*[=+@]/.test(s)||/^[\s]*-[^0-9.]/.test(s))s="'"+s;return /[,"\r\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function csvGeneric(rows){return '\ufeff'+rows.map(r=>r.map(csvEsc).join(',')).join('\r\n')}
+function flattenExport(obj,prefix='',out={}){
+ if(obj===null||obj===undefined){out[prefix||'value']='';return out}
+ if(Array.isArray(obj)){out[prefix||'value']=JSON.stringify(obj);return out}
+ if(typeof obj==='object'){for(const [k,v] of Object.entries(obj)){const name=prefix?prefix+'.'+k:k;if(v&&typeof v==='object'&&!Array.isArray(v))flattenExport(v,name,out);else out[name]=v==null?'':Array.isArray(v)?JSON.stringify(v):v}return out}
+ out[prefix||'value']=obj;return out
+}
+function datasetCSV(items){
+ const data=items.map(x=>flattenExport(x)),keys=[...new Set(data.flatMap(x=>Object.keys(x)))];
+ return csvGeneric([keys,...data.map(x=>keys.map(k=>x[k]??''))])
+}
+function pageSettings(){return [...document.querySelectorAll('input,select,textarea')].map(e=>({id:e.id||null,type:e.type||e.tagName.toLowerCase(),value:e.value,checked:e.type==='checkbox'?e.checked:undefined})).filter(x=>x.id)}
+function pageSections(){return [...document.querySelectorAll('main .card')].map((e,i)=>({section:i+1,id:e.id||null,heading:e.querySelector('h2')?.innerText||null,text:e.innerText||''}))}
+async function exportEverything(){
+ const btn=$('exportAll'),status=$('exportAllStatus'),files=[],errors=[],seen=new Set();btn.disabled=true;
+ const add=(name,content)=>{if(!seen.has(name)){files.push({name,content});seen.add(name)}};
+ const previousDL=dl,oldSelection=$('xt').value;
+ try{
+  const problems=exportCheck();if(problems.length){status.textContent='ZIP bloccato: '+problems.join('; ')+'. Ricarica scanner e LONG/SHORT.';return}
+  status.textContent='Raccolta dati e CSV…';
+  add('README.txt','Esportazione completa della dashboard VRP/VIX.\nGenerato: '+new Date().toISOString()+'\nI dati N/D restano mancanti, non vengono inventati.\nI CSV dipendenti da calcoli non eseguiti non sono disponibili.\nLa cartella include snapshot dei dati già caricati e delle sezioni visibili.\n');
+  add('pagina/impostazioni.json',jsonExport(pageSettings()));
+  add('excel/TUTTI_I_DATI_UNICO.csv',(()=>{const rows=unifiedRows(),keys=[...new Set(rows.flatMap(r=>Object.keys(r)))];return csvGeneric([keys,...rows.map(r=>keys.map(k=>r[k]??''))])})());
+  add('pagina/sezioni_visualizzate.json',jsonExport(pageSections()));
+  add('pagina/testo_completo.txt',document.body.innerText);
+  add('pagina/dashboard.html',document.documentElement.outerHTML);
+  add('dati/stato.json',jsonExport({exportedAt:new Date().toISOString(),stale:STALE,worker:W,index:$('sx').value,rows:ROWS?.length||0,scanner:SCN.length,longShort:LR.length,errors:ERR,workerHealth:WH,optionStatus:OPTSTAT}));
+  if(D)add('dati/serie_indici.json',jsonExport(D));
+  if(ROWS)add('dati/righe_vix.json',jsonExport(ROWS));
+  if(CUR)add('dati/curva_vix.json',jsonExport(CUR));
+  if(SCN.length)add('dati/scanner_top100.json',jsonExport(SCN));
+  if(LR.length){add('dati/long_short.json',jsonExport(LR));add('excel/long_short_tutti_campi.csv',datasetCSV(LR));}
+  if(SCN.length)add('excel/scanner_tutti_campi.csv',datasetCSV(SCN));
+  if(ROWS?.length)add('excel/vix_tutti_campi.csv',datasetCSV(ROWS));
+  if(CUR?.length)add('excel/curva_futures_tutti_campi.csv',datasetCSV(CUR));
+  if(LR.length){const fundamentals=LR.map(x=>({ticker:x.s,settore:x.sec,...(x.f||{})}));add('excel/fondamentali_tutti_campi.csv',datasetCSV(fundamentals));}
+  add('ANALISI_LEGGIMI.txt','PACCHETTO DATI PER EXCEL E ANALISI PDF\n\n1. Apri i file della cartella excel/ in Excel (Dati > Da testo/CSV, codifica UTF-8).\n2. I file dati/*.json conservano strutture annidate e precisione dei dati.\n3. I CSV in csv/ sono gli export nativi del dashboard.\n4. Per creare un report PDF, carica questo ZIP in ChatGPT e chiedi: Analizza tutti i dati disponibili, descrivi regime VIX, fondamentali, punteggi LONG/SHORT, qualità/copertura e rischi; crea un PDF con tabelle e conclusioni, senza inventare valori mancanti.\n5. Il pacchetto fotografa i dati presenti al momento del click: avvia prima scanner e analisi LONG/SHORT.\n6. I campi N/D o vuoti indicano dati non disponibili, non zero.\n');
+  if(CORR)add('dati/correlazioni.json',jsonExport(CORR));
+  if(BTR)add('dati/backtest.json',jsonExport(BTR));
+  if(ROWS&&AX){const t=table();add('csv/vrp_completo.csv',csvGeneric([t.H,...t.R]));}
+  if(LR.length){const c=LSC.csv(LR);add('csv/long_short_top100.csv',csvGeneric([c.H,...c.R]));}
+  // Riusa gli esportatori esistenti senza modificare i calcoli.
+  dl=(txt,name,type)=>add('csv/'+name,txt);
+  if(SCN.length){for(const option of $('xt').options){$('xt').value=option.value;try{expo()}catch(e){errors.push(option.value+': '+String(e))}}}
+  $('xt').value=oldSelection;
+  if(ROWS&&AX){try{$('ai1').onclick()}catch(e){errors.push('export AI: '+String(e))}}
+  // L'export top100 vs VIX esegue richieste aggiuntive: attendi la fine.
+  if(D&&ROWS&&AX&&$('tk').value.trim()){
+   status.textContent='Recupero CSV titoli vs VIX (può richiedere tempo)…';
+   try{await $('ex2').onclick()}catch(e){errors.push('titoli vs VIX: '+String(e))}
+  }
+  dl=previousDL;
+  if(errors.length)add('ERRORI_EXPORT.txt',errors.join('\n'));
+  add('MANIFEST.json',jsonExport({generatedAt:new Date().toISOString(),files:files.map(x=>x.name),warnings:errors}));
+  status.textContent='Creazione ZIP ('+files.length+' file)…';
+  const blob=makeZIP(files),stamp=new Date().toISOString().replace(/[:.]/g,'-');
+  downloadBlob(blob,'VIX_SCANNER_EXPORT_COMPLETO_'+stamp+'.zip');
+  status.textContent='ZIP pronto: '+files.length+' file · '+(blob.size/1048576).toFixed(2)+' MB'+(errors.length?' · '+errors.length+' avvisi':'');
+ }catch(e){status.textContent='Errore export: '+String(e&&e.message||e)}finally{dl=previousDL;$('xt').value=oldSelection;btn.disabled=false}
+}
+// CSV unico: righe eterogenee con schema comune e colonna tipo_record.
+// Non ripete i dati azionari su ogni seduta storica (evita falsi join temporali).
+function unifiedRows(){
+ const out=[],stamp=new Date().toISOString(),latest=ROWS?.length?ROWS[ROWS.length-1]:null;
+ const base={estratto_il:stamp,fonte_worker:W,indice_selezionato:$('sx').value};
+ const push=(type,obj)=>out.push(flattenExport({tipo_record:type,...base,...obj}));
+ // Utilizza ESATTAMENTE il dataset della esportazione storica completa.
+ // Include RV, VRP, futures F1-F8, date settlement, basis, slope, esiti ex-post.
+ if(ROWS?.length&&AX&&D){
+  const t=table();
+  const futureFields=new Set(['rv_futura_21g','edge_21g','picco_avverso_5g']);
+  t.R.forEach((values,i)=>{
+   const record=Object.fromEntries(t.H.map((key,j)=>[key,values[j]]));
+   const futureAvailable=futureFields.size&&[...futureFields].some(k=>record[k]!==''&&record[k]!=null);
+   push('STORICO_VIX_VRP',{
+    indice_storico:i,data_riferimento:record.data,
+    tipo_temporale:'SERIE_STORICA',
+    dati_ex_post_presenti:futureAvailable?1:0,
+    dati_futures_contratti:record.f1!==''?'PRESENTI':'NON DISPONIBILI',
+    ...record
+   });
+  });
+ }
+ // Snapshot della curva futures corrente: NON confonderlo con i valori storici.
+ if(D?.fx?.length)D.fx.forEach((item,i)=>{
+  const x=Array.isArray(item)?{scadenza:item[0],settlement:item[1],data_settlement:item[2]}:item;
+  push('FUTURE_VIX_SNAPSHOT',{contratto:i+1,tipo_temporale:'SNAPSHOT_CORRENTE',...x});
+ });
+ // Archivio dei futures per ogni giorno disponibile, senza inventare valori.
+ if(D?.hist)for(const [date,h] of Object.entries(D.hist)){
+  if(!Array.isArray(h?.fx))continue;
+  h.fx.forEach((f,i)=>{
+   if(!Array.isArray(f))return;
+   push('FUTURE_VIX_ARCHIVIO',{
+    data_archivio:date,contratto:i+1,scadenza:f[0],settlement:f[1],data_settlement:f[2],
+    coerenza_data_settlement:f[2]===date?'COINCIDE':'NON COINCIDE',
+    tipo_temporale:'ARCHIVIO_WORKER'
+   });
+  });
+ }
+ const scans=new Map(SCN.map(x=>[x.s,x]));
+ const ls=new Map(LR.map(x=>[x.s,x]));
+ const tickers=new Set([...scans.keys(),...ls.keys()]);
+ const regime=typeof regInfo==='function'?regInfo():{stale:true};
+ for(const ticker of tickers){
+  const a=scans.get(ticker)||{},b=ls.get(ticker)||{},fund=b.f||FC[ticker]||null;
+  push('TITOLO_SCANNER_LONG_SHORT',{
+   ticker,data_riferimento:latest?.d||'',tipo_temporale:'SNAPSHOT_CORRENTE',
+   vix_ultimo:regime.vix??null,regime_vix:regime.stale?'N/D':(b.rn||''),
+   scanner:a,fondamentali:fund,long_short:b.s?b:null,
+   stato_fondamentali:fund?'DISPONIBILI':'NON DISPONIBILI',
+   stato_punteggi:b.s?'CALCOLATI':'NON CALCOLATI'
+  });
+ }
+ if(CORR){CORR.T.forEach((ticker,i)=>CORR.T.forEach((other,j)=>{if(j>i&&Number.isFinite(CORR.Mx[i]?.[j]))push('CORRELAZIONE_TITOLI',{ticker,altro_ticker:other,correlazione_250g:CORR.Mx[i][j],tipo_temporale:'STATISTICA_STORICA'});}));}
+ if(BTR?.res)BTR.res.forEach(r=>push('BACKTEST_SCANNER',{...r,costo_decimale:BTR.cost,tipo_temporale:'RISULTATO_RETROSPETTIVO',avvertenza:'Universo attuale: survivorship bias; NON backtest dei punteggi LONG/SHORT'}));
+ for(const [ticker,serie] of Object.entries(SER||{})){if(!serie?.ds)continue;serie.ds.forEach((date,i)=>push('PREZZO_TITOLO_STORICO',{ticker,data_riferimento:date,close:serie.cl?.[i]??null,z_rv20:serie.zs?.[i]??null,tipo_temporale:'SERIE_STORICA_PREZZI'}));}
+ [...tickers].forEach(ticker=>{if(FT[ticker])push('PROVENIENZA_FONDAMENTALI',{ticker,fonte:'Yahoo Finance tramite Worker /fundamentals',acquisito_il:new Date(FT[ticker]).toISOString(),pubblicato_il:'NON DISPONIBILE',tipo_temporale:'METADATO_FONTE'});});
+ pageSettings().forEach(x=>push('IMPOSTAZIONE',{impostazione:x}));
+ const docs=[
+  ['STORICO_VIX_VRP','Serie storica giornaliera completa, con le stesse colonne del CSV completo'],
+  ['FUTURE_VIX_SNAPSHOT','Curva futures attuale; NON attribuirla alle date passate'],
+  ['FUTURE_VIX_ARCHIVIO','Settlement dei contratti effettivamente presenti nell’archivio KV'],
+  ['TITOLO_SCANNER_LONG_SHORT','Snapshot azionario; NON serie storica dei fondamentali'],
+  ['rv_futura_21g','Esito ex-post calcolato con 21 sedute successive; vietato come feature contemporanea'],
+  ['edge_21g','Esito ex-post IV meno RV futura; vietato come feature contemporanea'],
+  ['picco_avverso_5g','Esito ex-post; vietato come feature contemporanea'],
+  ['f1…f8','Settlement dei futures per la data storica; vuoto quando archivio assente/non allineato'],
+  ['f1_data','Data effettiva del settlement F1'],
+  ['basis_f1','F1 meno IV spot; disponibile solo con F1 valido'],
+  ['slope_f2_f1','F2 meno F1; disponibile solo con entrambi i settlement validi'],
+  ['regime_curva','Classificazione da indici a scadenza costante, NON dai contratti F1/F2']
+ ];
+ docs.forEach(([campo,definizione])=>push('DIZIONARIO_DATI',{campo,definizione}));
+ const tcount=out.filter(r=>r.tipo_record==='STORICO_VIX_VRP').length;
+ const futuresCount=out.filter(r=>r.tipo_record==='STORICO_VIX_VRP'&&r.f1!==''&&r.f1!=null).length;
+ push('METADATI',{
+  storico_sedute:tcount,storico_sedute_con_f1:futuresCount,
+  archivio_futures_giorni:Object.keys(D?.hist||{}).length,
+  titoli_scanner:SCN.length,titoli_punteggi:LR.length,scanner_sincronizzato:scanCurrent()?1:0,long_short_sincronizzato:lsCurrent()?1:0,problemi_export:exportCheck().join('; '),
+  titoli_con_fondamentali:[...tickers].filter(t=>!!(ls.get(t)?.f||FC[t])).length,
+  origine_futures_storici:'Archivio KV Worker; nessun backfill artificiale',
+  nota:'Serie storica VIX/VRP e snapshot titoli non condividono la stessa dimensione temporale. I campi ex-post non sono input storici.'
+ });
+ return out;
+}
+async function gzipCSV(csv){
+ if(typeof CompressionStream!=='function')throw new Error('Il browser non supporta CompressionStream (gzip). Usa Chrome, Edge o Firefox aggiornato.');
+ const encoder=new TextEncoder();
+ // Compressione gzip nativa nel browser: nessun servizio esterno, nessun dato trasmesso.
+ const stream=new Blob([encoder.encode(csv)]).stream().pipeThrough(new CompressionStream('gzip'));
+ const result=await new Response(stream).blob();
+ // Verifica la firma GZIP (1F 8B 08) prima di autorizzare il download.
+ const sig=new Uint8Array(await result.slice(0,3).arrayBuffer());
+ if(sig.length!==3||sig[0]!==0x1f||sig[1]!==0x8b||sig[2]!==0x08)throw new Error('Verifica GZIP fallita: il file non è compresso. Nessun CSV normale è stato scaricato.');
+ return new Blob([result],{type:'application/gzip'});
+}
+async function exportUnifiedCSV(){
+ const btn=$('exportUnified'),status=$('exportAllStatus');btn.disabled=true;
+ try{
+  const problems=exportCheck();if(problems.length){status.textContent='Esportazione bloccata: '+problems.join('; ')+'. Ricarica scanner e LONG/SHORT.';return}
+  const rows=unifiedRows(),keys=[...new Set(rows.flatMap(r=>Object.keys(r)))];
+  status.textContent='Generazione CSV e compressione gzip in corso…';
+  // CSV identico al precedente: la compressione non rimuove righe o colonne.
+  const csv=csvGeneric([keys,...rows.map(r=>keys.map(k=>r[k]??''))]);
+  const originalBytes=new Blob([csv]).size;
+  const gz=await gzipCSV(csv);
+  const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+  downloadBlob(gz,'VIX_VRP_COMPRESSO_VERIFICATO_'+stamp+'.csv.gz');
+  status.textContent='GZIP VERIFICATO (firma 1F 8B 08). File .csv.gz, NON .csv. Se carichi qui un .csv, stai caricando un altro file. '+rows.length+' righe, '+keys.length+' colonne · '+(originalBytes/1048576).toFixed(2)+' MiB → '+(gz.size/1048576).toFixed(2)+' MiB ('+(100*(1-gz.size/originalBytes)).toFixed(1)+'% in meno).';
+ }catch(e){status.textContent='ERRORE: nessun file .csv.gz generato. '+String(e?.message||e)}finally{btn.disabled=false}
+}
+['sx','sw','se','rA','rB','rC','zh','zl','vh','mn','tk','so'].forEach(id=>$(id)?.addEventListener('change',()=>{if(LR.length)invalidateLS('Parametri modificati: ricalcolare LONG/SHORT')}));
+$('exportUnified').onclick=exportUnifiedCSV;
+$('exportAll').onclick=exportEverything;
+</script></body></html>
